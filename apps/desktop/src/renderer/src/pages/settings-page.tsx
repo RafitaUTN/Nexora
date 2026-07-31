@@ -79,7 +79,8 @@ function ProviderApiKeyRow({ provider }: { provider: ProviderId }): JSX.Element 
       push({ kind: 'success', title: `Clave guardada para ${PROVIDER_LABELS[provider]}` })
       setValue('')
     },
-    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo guardar la clave', body: error.message }),
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo guardar la clave', body: error.message }),
   })
 
   const deleteKeyMutation = useMutation({
@@ -88,7 +89,8 @@ function ProviderApiKeyRow({ provider }: { provider: ProviderId }): JSX.Element 
       void queryClient.invalidateQueries({ queryKey: queryKeys.apiKey(provider) })
       push({ kind: 'success', title: `Clave eliminada para ${PROVIDER_LABELS[provider]}` })
     },
-    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo eliminar la clave', body: error.message }),
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo eliminar la clave', body: error.message }),
   })
 
   return (
@@ -98,7 +100,9 @@ function ProviderApiKeyRow({ provider }: { provider: ProviderId }): JSX.Element 
           <KeyRound className="size-4 text-muted-foreground" />
           <p className="text-sm font-medium">{PROVIDER_LABELS[provider]}</p>
           {status.data ? (
-            <Badge tone={status.data.set ? 'success' : 'neutral'}>{status.data.set ? 'Configurada' : 'Sin clave'}</Badge>
+            <Badge tone={status.data.set ? 'success' : 'neutral'}>
+              {status.data.set ? 'Configurada' : 'Sin clave'}
+            </Badge>
           ) : null}
         </div>
       </div>
@@ -132,7 +136,10 @@ function ProviderApiKeyRow({ provider }: { provider: ProviderId }): JSX.Element 
   )
 }
 
-const STATUS_META: Record<UpdateStatus['status'], { label: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'error' }> = {
+const STATUS_META: Record<
+  UpdateStatus['status'],
+  { label: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'error' }
+> = {
   idle: { label: 'Sin comprobar', tone: 'neutral' },
   checking: { label: 'Comprobando…', tone: 'info' },
   available: { label: 'Actualización disponible', tone: 'warning' },
@@ -154,7 +161,8 @@ function UpdatesSection(): JSX.Element {
   const checkMutation = useMutation({
     mutationFn: () => window.api.updates.check(),
     onSuccess: (next) => setStatus(next),
-    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo buscar actualizaciones', body: error.message }),
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo buscar actualizaciones', body: error.message }),
   })
 
   const installMutation = useMutation({
@@ -213,10 +221,12 @@ export function SettingsPage(): JSX.Element {
   const settings = useQuery({ queryKey: queryKeys.settings, queryFn: () => window.api.settings.get() })
   const [form, setForm] = useState<SettingsForm | null>(null)
   const [dirty, setDirty] = useState(false)
+  const [lastData, setLastData] = useState<AppSettings | undefined>(settings.data)
 
-  useEffect(() => {
-    if (settings.data && !dirty) setForm(toForm(settings.data))
-  }, [settings.data, dirty])
+  if (settings.data !== lastData && !dirty) {
+    setLastData(settings.data)
+    setForm(settings.data ? toForm(settings.data) : null)
+  }
 
   const set = <K extends keyof SettingsForm>(key: K, value: SettingsForm[K]): void => {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev))
@@ -257,7 +267,8 @@ export function SettingsPage(): JSX.Element {
       setDirty(false)
       push({ kind: 'success', title: 'Ajustes guardados' })
     },
-    onError: (error: Error) => push({ kind: 'error', title: 'No se pudieron guardar los ajustes', body: error.message }),
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudieron guardar los ajustes', body: error.message }),
   })
 
   const healthMutation = useMutation({
@@ -269,7 +280,8 @@ export function SettingsPage(): JSX.Element {
           : { kind: 'warning', title: 'IA no disponible', body: health.error ?? 'Sin conexión' },
       )
     },
-    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo comprobar la IA', body: error.message }),
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo comprobar la IA', body: error.message }),
   })
 
   if (settings.isLoading || !form) {
@@ -301,7 +313,11 @@ export function SettingsPage(): JSX.Element {
         <div className="grid gap-4 p-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="settings-theme">Tema</Label>
-            <Select id="settings-theme" value={form.theme} onChange={(e) => set('theme', e.target.value as SettingsForm['theme'])}>
+            <Select
+              id="settings-theme"
+              value={form.theme}
+              onChange={(e) => set('theme', e.target.value as SettingsForm['theme'])}
+            >
               <option value="system">Sistema</option>
               <option value="light">Claro</option>
               <option value="dark">Oscuro</option>
@@ -309,7 +325,11 @@ export function SettingsPage(): JSX.Element {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="settings-language">Idioma</Label>
-            <Select id="settings-language" value={form.language} onChange={(e) => set('language', e.target.value as SettingsForm['language'])}>
+            <Select
+              id="settings-language"
+              value={form.language}
+              onChange={(e) => set('language', e.target.value as SettingsForm['language'])}
+            >
               <option value="es">Español</option>
               <option value="en">English</option>
             </Select>
@@ -359,7 +379,12 @@ export function SettingsPage(): JSX.Element {
             <h2 className="text-base font-semibold">Inteligencia artificial</h2>
             <p className="text-xs text-muted-foreground">Clasificación y extracción de entidades</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => healthMutation.mutate()} disabled={healthMutation.isPending}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => healthMutation.mutate()}
+            disabled={healthMutation.isPending}
+          >
             {healthMutation.isPending ? <Spinner /> : <Wifi />}
             Comprobar conexión
           </Button>
@@ -367,7 +392,11 @@ export function SettingsPage(): JSX.Element {
         <div className="grid gap-4 p-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="settings-provider">Proveedor</Label>
-            <Select id="settings-provider" value={form.provider} onChange={(e) => set('provider', e.target.value)}>
+            <Select
+              id="settings-provider"
+              value={form.provider}
+              onChange={(e) => set('provider', e.target.value)}
+            >
               <option value="">Ninguno</option>
               {PROVIDERS.map((provider) => (
                 <option key={provider} value={provider}>
@@ -423,7 +452,10 @@ export function SettingsPage(): JSX.Element {
               <p className="text-sm font-medium">Enviar documento completo</p>
               <p className="text-xs text-muted-foreground">Si no, se envía un extracto</p>
             </div>
-            <Switch checked={form.sendWholeDocument} onCheckedChange={(checked) => set('sendWholeDocument', checked)} />
+            <Switch
+              checked={form.sendWholeDocument}
+              onCheckedChange={(checked) => set('sendWholeDocument', checked)}
+            />
           </div>
         </div>
       </section>
@@ -431,13 +463,19 @@ export function SettingsPage(): JSX.Element {
       <section className="rounded-lg border bg-card">
         <div className="border-b p-4">
           <h2 className="text-base font-semibold">Actualizaciones</h2>
-          <p className="text-xs text-muted-foreground">Comprobación e instalación automática de nuevas versiones.</p>
+          <p className="text-xs text-muted-foreground">
+            Comprobación e instalación automática de nuevas versiones.
+          </p>
         </div>
         <UpdatesSection />
         <div className="grid gap-4 border-t p-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="settings-updates-channel">Canal</Label>
-            <Select id="settings-updates-channel" value={form.channel} onChange={(e) => set('channel', e.target.value as SettingsForm['channel'])}>
+            <Select
+              id="settings-updates-channel"
+              value={form.channel}
+              onChange={(e) => set('channel', e.target.value as SettingsForm['channel'])}
+            >
               <option value="stable">Estable</option>
               <option value="beta">Beta</option>
             </Select>

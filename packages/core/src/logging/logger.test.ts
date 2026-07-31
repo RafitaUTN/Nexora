@@ -41,4 +41,23 @@ describe('ConsoleLogger', () => {
     expect(parsed.error).toContain('fallo')
     err.mockRestore()
   })
+
+  it('warn usa console.warn', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const logger = new ConsoleLogger('info')
+    logger.warn('cuidado')
+    const parsed = JSON.parse(String(spy.mock.calls[0]?.[0] ?? ''))
+    expect(parsed.level).toBe('warn')
+    expect(parsed.msg).toBe('cuidado')
+    spy.mockRestore()
+  })
+
+  it('error sin stack ni meta usa el mensaje como fallback', () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const logger = new ConsoleLogger('info')
+    logger.error('x', undefined, { message: 'solo mensaje' } as Error)
+    const parsed = JSON.parse(String(err.mock.calls[0]?.[0] ?? ''))
+    expect(parsed.error).toBe('solo mensaje')
+    err.mockRestore()
+  })
 })

@@ -37,11 +37,20 @@ describe('integración SQLite', () => {
 
   it('aplica migraciones y crea las tablas esperadas', () => {
     const db = freshDb()
-    const tables = db
-      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`)
-      .all() as { name: string }[]
+    const tables = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all() as {
+      name: string
+    }[]
     const names = tables.map((t) => t.name)
-    for (const table of ['documents', 'tags', 'secrets', 'settings', 'audit_log', 'automations', 'history', 'licenses']) {
+    for (const table of [
+      'documents',
+      'tags',
+      'secrets',
+      'settings',
+      'audit_log',
+      'automations',
+      'history',
+      'licenses',
+    ]) {
       expect(names).toContain(table)
     }
   })
@@ -130,8 +139,7 @@ describe('integración SQLite', () => {
     expect(await store.has('openai')).toBe(true)
     expect(await store.get('openai')).toBe('sk-secret-value')
     const raw = db.prepare(`SELECT ciphertext FROM secrets WHERE kind = 'openai'`).get() as
-      | { ciphertext: Buffer }
-      | undefined
+      { ciphertext: Buffer } | undefined
     expect(Buffer.isBuffer(raw?.ciphertext)).toBe(true)
     expect(String(raw?.ciphertext ?? '')).not.toContain('sk-secret')
     await store.delete('openai')
@@ -162,6 +170,33 @@ describe('integración SQLite', () => {
     expect(stats.total).toBe(1)
   })
 
+  it('search repo: tokens vacíos devuelven [] y filtros ext/tagId', async () => {
+    const db = freshDb()
+    const docs = new SqliteDocumentRepository(db)
+    const tags = new SqliteTagRepository(db)
+    const search = new SqliteSearchRepository(db)
+    const doc = await docs.save({
+      sourceId: null,
+      path: '/filtro.pdf',
+      filename: 'filtro.pdf',
+      ext: 'pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 10,
+      hashSha256: 'hash-filtro',
+      fileMtimeMs: null,
+    })
+    await docs.setContent(doc.id, 'Contrato de arrendamiento 2025')
+    const tag = await tags.create({ name: 'importante', color: '#00ff00' })
+    await tags.assign(tag.id, doc.id)
+
+    expect(await search.fullText('el la de', 10)).toEqual([])
+
+    expect(await search.fullText('contrato', 10, { ext: 'pdf' })).toHaveLength(1)
+    expect(await search.fullText('contrato', 10, { ext: 'docx' })).toHaveLength(0)
+    expect(await search.fullText('contrato', 10, { tagId: tag.id })).toHaveLength(1)
+    expect(await search.fullText('contrato', 10, { tagId: 999 })).toHaveLength(0)
+  })
+
   it('source repo: listar, añadir, último scan y eliminar', async () => {
     const db = freshDb()
     const repo = new SqliteSourceRepository(db)
@@ -174,7 +209,13 @@ describe('integración SQLite', () => {
       scanMode: 'recursive',
       enabled: true,
     })
-    expect(added).toMatchObject({ path: '/home/rafa/docs', name: 'docs', kind: 'folder', scanMode: 'recursive', enabled: true })
+    expect(added).toMatchObject({
+      path: '/home/rafa/docs',
+      name: 'docs',
+      kind: 'folder',
+      scanMode: 'recursive',
+      enabled: true,
+    })
 
     await repo.add({
       path: '/tmp/off',
@@ -247,6 +288,14 @@ describe('integración SQLite', () => {
 
     await repo.saveEntities(doc.id, [])
     expect(await repo.listEntities(doc.id)).toHaveLength(1)
+
+    db.prepare('INSERT INTO entities (document_id, kind, value, confidence) VALUES (?, ?, ?, NULL)').run(
+      doc.id,
+      'iban',
+      'ES123',
+    )
+    const nullConf = await repo.listEntities(doc.id)
+    expect(nullConf.find((e) => e.kind === 'iban')).toMatchObject({ kind: 'iban', value: 'ES123', confidence: 0 })
   })
 
   it('ocr queue repo: encolar, batch por prioridad, estados y conteo', async () => {
@@ -308,7 +357,9 @@ describe('integración SQLite', () => {
     expect(await repo.get('hash-1')).toBe('nueva')
 
     await repo.set('hash-2', 'caduca', 60)
-    db.prepare(`UPDATE ai_cache SET expires_at = datetime('now', '-1 hour') WHERE request_hash = 'hash-2'`).run()
+    db.prepare(
+      `UPDATE ai_cache SET expires_at = datetime('now', '-1 hour') WHERE request_hash = 'hash-2'`,
+    ).run()
     expect(await repo.get('hash-2')).toBeNull()
   })
 

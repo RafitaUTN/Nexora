@@ -1,4 +1,4 @@
-import { describe, afterEach, it, expect } from 'vitest'
+import { describe, afterEach, it, expect, vi } from 'vitest'
 import { createServer, type Server, type IncomingMessage } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { OllamaProvider } from './ollama'
@@ -9,10 +9,13 @@ import { OpenRouterProvider } from './openrouter'
 let servers: Server[] = []
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   for (const server of servers.splice(0)) server.close()
 })
 
-async function mockServer(handler: (req: IncomingMessage, body: string) => { status: number; json?: unknown }): Promise<string> {
+async function mockServer(
+  handler: (req: IncomingMessage, body: string) => { status: number; json?: unknown },
+): Promise<string> {
   const server = createServer((req, res) => {
     let body = ''
     req.on('data', (chunk) => (body += chunk))
@@ -54,10 +57,30 @@ describe('OllamaProvider', () => {
   })
 
   it('health no-ok si el servidor no responde', async () => {
-    const provider = new OllamaProvider({ id: 'ollama', apiKey: '', baseUrl: 'http://127.0.0.1:1', defaultModel: 'llama3.2' })
+    const provider = new OllamaProvider({
+      id: 'ollama',
+      apiKey: '',
+      baseUrl: 'http://127.0.0.1:1',
+      defaultModel: 'llama3.2',
+    })
     const health = await provider.health()
     expect(health.ok).toBe(false)
     expect(health.error?.length ?? 0).toBeGreaterThan(0)
+  })
+
+  it('health con error no-Error devuelve "Sin conexión"', async () => {
+    vi.stubGlobal('fetch', () => {
+      throw 'boom'
+    })
+    const provider = new OllamaProvider({
+      id: 'ollama',
+      apiKey: '',
+      baseUrl: 'http://x',
+      defaultModel: 'llama3.2',
+    })
+    const health = await provider.health()
+    expect(health.ok).toBe(false)
+    expect(health.error).toBe('Sin conexión')
   })
 })
 
@@ -66,9 +89,17 @@ describe('ClaudeProvider', () => {
     let headers = ''
     const baseUrl = await mockServer((req) => {
       headers = `${req.headers['x-api-key'] ?? ''}|${req.headers['anthropic-version'] ?? ''}`
-      return { status: 200, json: { content: [{ text: 'hola' }], usage: { input_tokens: 5, output_tokens: 3 } } }
+      return {
+        status: 200,
+        json: { content: [{ text: 'hola' }], usage: { input_tokens: 5, output_tokens: 3 } },
+      }
     })
-    const provider = new ClaudeProvider({ id: 'claude', apiKey: 'ant-key', baseUrl, defaultModel: 'claude-3-5-haiku' })
+    const provider = new ClaudeProvider({
+      id: 'claude',
+      apiKey: 'ant-key',
+      baseUrl,
+      defaultModel: 'claude-3-5-haiku',
+    })
     const response = await provider.chat({ messages: [{ role: 'user', content: 'hi' }] })
     expect(response.content).toBe('hola')
     expect(response.usage.totalTokens).toBe(8)
@@ -84,10 +115,18 @@ describe('GeminiProvider', () => {
       header = req.headers['x-goog-api-key'] as string
       return {
         status: 200,
-        json: { candidates: [{ content: { parts: [{ text: '{"category":"contrato"}' }] } }], usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 4 } },
+        json: {
+          candidates: [{ content: { parts: [{ text: '{"category":"contrato"}' }] } }],
+          usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 4 },
+        },
       }
     })
-    const provider = new GeminiProvider({ id: 'gemini', apiKey: 'g-key', baseUrl, defaultModel: 'gemini-1.5-flash' })
+    const provider = new GeminiProvider({
+      id: 'gemini',
+      apiKey: 'g-key',
+      baseUrl,
+      defaultModel: 'gemini-1.5-flash',
+    })
     const response = await provider.chat({ messages: [{ role: 'user', content: 'x' }] })
     expect(response.content).toContain('contrato')
     expect(response.usage.totalTokens).toBe(14)
@@ -102,7 +141,12 @@ describe('OpenRouterProvider', () => {
       auth = req.headers.authorization ?? ''
       return { status: 200, json: { choices: [{ message: { content: 'ok' } }], usage: { total_tokens: 7 } } }
     })
-    const provider = new OpenRouterProvider({ id: 'openrouter', apiKey: 'or-key', baseUrl, defaultModel: 'openai/gpt-4o-mini' })
+    const provider = new OpenRouterProvider({
+      id: 'openrouter',
+      apiKey: 'or-key',
+      baseUrl,
+      defaultModel: 'openai/gpt-4o-mini',
+    })
     const response = await provider.chat({ messages: [{ role: 'user', content: 'x' }] })
     expect(response.content).toBe('ok')
     expect(response.usage.totalTokens).toBe(7)
@@ -112,13 +156,17 @@ describe('OpenRouterProvider', () => {
   it('lanza el error del proveedor si viene en el cuerpo', async () => {
     const baseUrl = await mockServer(() => ({ status: 200, json: { error: { message: 'quota exceeded' } } }))
     const provider = new OpenRouterProvider({ id: 'openrouter', apiKey: 'k', baseUrl, defaultModel: 'm' })
-    await expect(provider.chat({ messages: [{ role: 'user', content: 'x' }] })).rejects.toThrow('quota exceeded')
+    await expect(provider.chat({ messages: [{ role: 'user', content: 'x' }] })).rejects.toThrow(
+      'quota exceeded',
+    )
   })
 
   it('lanza si la respuesta está vacía', async () => {
     const baseUrl = await mockServer(() => ({ status: 200, json: { choices: [] } }))
     const provider = new OpenRouterProvider({ id: 'openrouter', apiKey: 'k', baseUrl, defaultModel: 'm' })
-    await expect(provider.chat({ messages: [{ role: 'user', content: 'x' }] })).rejects.toThrow('Respuesta vacía')
+    await expect(provider.chat({ messages: [{ role: 'user', content: 'x' }] })).rejects.toThrow(
+      'Respuesta vacía',
+    )
   })
 
   it('envía response_format json y model cuando se indican', async () => {
@@ -156,6 +204,21 @@ describe('OpenRouterProvider', () => {
     const provider = new OpenRouterProvider({ id: 'openrouter', apiKey: 'k', baseUrl, defaultModel: 'm' })
     expect((await provider.health()).ok).toBe(true)
   })
+
+  it('health con error no-Error devuelve "Sin conexión"', async () => {
+    vi.stubGlobal('fetch', () => {
+      throw 'boom'
+    })
+    const provider = new OpenRouterProvider({
+      id: 'openrouter',
+      apiKey: 'k',
+      baseUrl: 'http://x',
+      defaultModel: 'm',
+    })
+    const health = await provider.health()
+    expect(health.ok).toBe(false)
+    expect(health.error).toBe('Sin conexión')
+  })
 })
 
 describe('ClaudeProvider con system y errores', () => {
@@ -165,7 +228,12 @@ describe('ClaudeProvider con system y errores', () => {
       body = raw
       return { status: 200, json: { content: [{ text: 'ok' }], usage: {} } }
     })
-    const provider = new ClaudeProvider({ id: 'claude', apiKey: 'k', baseUrl, defaultModel: 'claude-3-5-haiku' })
+    const provider = new ClaudeProvider({
+      id: 'claude',
+      apiKey: 'k',
+      baseUrl,
+      defaultModel: 'claude-3-5-haiku',
+    })
     await provider.chat({
       messages: [
         { role: 'system', content: 'sé breve' },
@@ -186,7 +254,9 @@ describe('ClaudeProvider con system y errores', () => {
   it('lanza si el contenido está vacío', async () => {
     const baseUrl = await mockServer(() => ({ status: 200, json: { content: [] } }))
     const provider = new ClaudeProvider({ id: 'claude', apiKey: 'k', baseUrl, defaultModel: 'm' })
-    await expect(provider.chat({ messages: [{ role: 'user', content: 'x' }] })).rejects.toThrow('Respuesta vacía')
+    await expect(provider.chat({ messages: [{ role: 'user', content: 'x' }] })).rejects.toThrow(
+      'Respuesta vacía',
+    )
   })
 
   it('health no-ok propaga el estado', async () => {
@@ -199,7 +269,12 @@ describe('ClaudeProvider con system y errores', () => {
 describe('GeminiProvider con errores', () => {
   it('lanza el error del proveedor', async () => {
     const baseUrl = await mockServer(() => ({ status: 200, json: { error: { message: 'invalid key' } } }))
-    const provider = new GeminiProvider({ id: 'gemini', apiKey: 'k', baseUrl, defaultModel: 'gemini-1.5-flash' })
+    const provider = new GeminiProvider({
+      id: 'gemini',
+      apiKey: 'k',
+      baseUrl,
+      defaultModel: 'gemini-1.5-flash',
+    })
     await expect(provider.chat({ messages: [{ role: 'user', content: 'x' }] })).rejects.toThrow('invalid key')
   })
 
@@ -209,7 +284,12 @@ describe('GeminiProvider con errores', () => {
       body = raw
       return { status: 200, json: { candidates: [{ content: { parts: [{ text: 'x' }] } }] } }
     })
-    const provider = new GeminiProvider({ id: 'gemini', apiKey: 'k', baseUrl, defaultModel: 'gemini-1.5-flash' })
+    const provider = new GeminiProvider({
+      id: 'gemini',
+      apiKey: 'k',
+      baseUrl,
+      defaultModel: 'gemini-1.5-flash',
+    })
     await provider.chat({
       messages: [
         { role: 'system', content: 'ayuda' },

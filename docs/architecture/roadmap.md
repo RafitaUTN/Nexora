@@ -46,7 +46,7 @@
 - Unit (domain/core/ai/ocr) con fakes de puertos, coverage ≥ 90%. ✅ (107 tests, 85% → thresholds 85)
 - Integration (repositorios contra SQLite temporal, AIProvider contra mock server). ✅
 - E2E Playwright (smoke: abrir, escanear carpeta, buscar). ⏳ Pendiente
-- Auditoría: ESLint import/no-restricted, `npm audit`, CodeQL report, revisión de deuda técnica. ⏳ Pendiente (FASE 9)
+- Auditoría: ESLint import/no-restricted, `npm audit`, CodeQL report, revisión deuda técnica. ✅ Parcial (deps + `npm audit` en FASE 9.1; CodeQL/deuda → FASE 9.2)
 
 ### FASE 8 — Tests OCR y cobertura ≥ 90%
 - FASE 8.1 Unit tests de `packages/ocr` (engine + worker): pool, cola, concurrencia, errores, health, dispose. ✅ (13 tests)
@@ -58,6 +58,15 @@
   - Cubiertos los 4 repositorios a 0%: sources, classification, ocr_queue, ai_cache/ai_usage (tests de integración).
   - Añadido health fallback de Ollama (ramas del catch).
   - Thresholds subidos en `vitest.config.ts` a 90/90/80/90.
+
+### FASE 9 — Auditoría y deuda técnica
+- FASE 9.1 Upgrades de dependencias + auditoría de seguridad. ✅
+  - Raíz: ESLint 10 (+`@eslint/js` 10, `typescript-eslint` 8.65, `react-hooks` 7), Vitest 4 (+`@vitest/coverage-v8` 4, soporta Vite 7).
+  - Desktop: Vite 7.3.6, electron-vite 5, electron-builder 26.15.3, react-router-dom 7.18.2, sharp 0.35.3 (también en `packages/document`).
+  - Overrides: `brace-expansion ^5.0.9` (GHSA-mh99-v99m-4gvg) global y `exceljs` → `uuid ^11.1.1` + `archiver ^7.0.1`.
+  - `npm audit`: de 25 → 2 vulnerabilidades high, ambas `react-router`/`react-router-dom` (GHSA-qwww-vcr4-c8h2, CSRF solo en RSC/SSR — no aplicable en SPA Electron/HashRouter); allowlist documentada en `scripts/audit.mjs` + script `npm run audit`.
+  - Cobertura reconfirmada tras el upgrade (91.77 / 80.77 / 90.9 / 93.02) con tests nuevos: `paged()` en `document.ts`, health con errores no-Error en providers, `warn`/`error` sin stack en logger, búsqueda edge-cases y confidence NULL en SQLite.
+  - `build`, `e2e` y `npm run audit` verificados localmente.
 
 ## Post-MVP
 - Usuarios multi-rol (Argon2, sesiones), activación de licencias online, sincronización Supabase/Postgres, colaboración, plugin de búsqueda de escritorio (Raycast-style).

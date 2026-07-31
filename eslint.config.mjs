@@ -49,10 +49,7 @@ export default [
       ...tseslint.configs.recommended.rules,
       'no-undef': 'off',
       'no-redeclare': 'off',
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
-      ],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
       '@typescript-eslint/no-non-null-assertion': 'error',
     },
@@ -66,8 +63,7 @@ export default [
           patterns: [
             {
               group: ['@documind/core', '@documind/ai', '@documind/ocr', '@documind/document'],
-              message:
-                'La capa de dominio no puede importar infraestructura. Usa solo @documind/shared.',
+              message: 'La capa de dominio no puede importar infraestructura. Usa solo @documind/shared.',
             },
           ],
         },
@@ -79,8 +75,13 @@ export default [
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      'react-hooks/incompatible-library': 'off',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: nodeGlobals },
   },
   {
     files: ['apps/desktop/src/renderer/src/main.tsx'],
