@@ -1,16 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import {
-  ArrowLeft,
-  BrainCircuit,
-  FileText,
-  Link2,
-  Plus,
-  Sparkles,
-  TextQuote,
-  Trash2,
-} from 'lucide-react'
+import { ArrowLeft, BrainCircuit, FileText, Link2, Plus, Sparkles, TextQuote, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -92,7 +83,7 @@ export function DocumentDetailPage(): JSX.Element {
       void queryClient.setQueryData(queryKeys.summary(documentId), result)
       push(
         result
-          ? { kind: 'success', title: 'Resumen generado', body: result.cached ? 'Desde la caché.' : 'Resumen listo.' }
+          ? { kind: 'success', title: 'Resumen generado', body: 'Resumen listo.' }
           : { kind: 'warning', title: 'Sin resumen', body: 'Revisa la configuración de IA.' },
       )
     },
@@ -105,13 +96,15 @@ export function DocumentDetailPage(): JSX.Element {
       invalidateDetail()
       setAssignTagId('')
     },
-    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo asignar la etiqueta', body: error.message }),
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo asignar la etiqueta', body: error.message }),
   })
 
   const removeTagMutation = useMutation({
     mutationFn: (tagId: number) => window.api.tags.remove(tagId, documentId),
     onSuccess: () => invalidateDetail(),
-    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo quitar la etiqueta', body: error.message }),
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo quitar la etiqueta', body: error.message }),
   })
 
   const createTagMutation = useMutation({
@@ -120,7 +113,8 @@ export function DocumentDetailPage(): JSX.Element {
       assignMutation.mutate(tag.id)
       setNewTagName('')
     },
-    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo crear la etiqueta', body: error.message }),
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo crear la etiqueta', body: error.message }),
   })
 
   const deleteMutation = useMutation({
@@ -154,7 +148,10 @@ export function DocumentDetailPage(): JSX.Element {
   if (!detail.data) {
     return (
       <div className="mx-auto max-w-4xl">
-        <Link to="/documents" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <Link
+          to="/documents"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
           <ArrowLeft className="size-4" />
           Documentos
         </Link>
@@ -169,7 +166,10 @@ export function DocumentDetailPage(): JSX.Element {
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6">
-      <Link to="/documents" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link
+        to="/documents"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
         <ArrowLeft className="size-4" />
         Documentos
       </Link>
@@ -196,15 +196,28 @@ export function DocumentDetailPage(): JSX.Element {
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
-          <Button variant="outline" onClick={() => summarizeMutation.mutate()} disabled={summarizeMutation.isPending}>
+          <Button
+            variant="outline"
+            onClick={() => summarizeMutation.mutate()}
+            disabled={summarizeMutation.isPending}
+          >
             {summarizeMutation.isPending ? <Spinner /> : <TextQuote />}
             Resumir
           </Button>
-          <Button variant="outline" onClick={() => classifyMutation.mutate()} disabled={classifyMutation.isPending}>
+          <Button
+            variant="outline"
+            onClick={() => classifyMutation.mutate()}
+            disabled={classifyMutation.isPending}
+          >
             {classifyMutation.isPending ? <Spinner /> : <BrainCircuit />}
             Clasificar con IA
           </Button>
-          <Button variant="destructive" size="icon" aria-label="Eliminar documento" onClick={() => setPendingDelete(true)}>
+          <Button
+            variant="destructive"
+            size="icon"
+            aria-label="Eliminar documento"
+            onClick={() => setPendingDelete(true)}
+          >
             <Trash2 />
           </Button>
         </div>
@@ -215,7 +228,10 @@ export function DocumentDetailPage(): JSX.Element {
         <MetaItem label="Actualizado" value={formatDateTime(doc.updatedAt)} />
         <MetaItem label="Tamaño" value={formatBytes(doc.sizeBytes)} />
         <MetaItem label="Idioma" value={doc.language ?? '—'} />
-        <MetaItem label="Confianza OCR" value={doc.ocrConfidence !== null ? `${(doc.ocrConfidence * 100).toFixed(0)} %` : '—'} />
+        <MetaItem
+          label="Confianza OCR"
+          value={doc.ocrConfidence !== null ? `${(doc.ocrConfidence * 100).toFixed(0)} %` : '—'}
+        />
       </dl>
 
       <section className="rounded-lg border bg-card">
@@ -223,11 +239,6 @@ export function DocumentDetailPage(): JSX.Element {
           <div className="flex items-center gap-2">
             <Sparkles className="size-4 text-primary" />
             <h2 className="text-base font-semibold">Clasificación</h2>
-            {classification ? (
-              <Badge tone={classification.cached ? 'neutral' : 'success'}>
-                {classification.cached ? 'Caché' : 'Nueva'}
-              </Badge>
-            ) : null}
           </div>
         </div>
         <div className="p-4">
@@ -243,7 +254,9 @@ export function DocumentDetailPage(): JSX.Element {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Modelo</p>
-                <p className="text-base font-medium">{classification.provider} · {classification.model}</p>
+                <p className="text-base font-medium">
+                  {classification.provider} · {classification.model}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Fecha</p>
@@ -263,11 +276,6 @@ export function DocumentDetailPage(): JSX.Element {
           <div className="flex items-center gap-2">
             <TextQuote className="size-4 text-primary" />
             <h2 className="text-base font-semibold">Resumen</h2>
-            {summaryQuery.data ? (
-              <Badge tone={summaryQuery.data.cached ? 'neutral' : 'success'}>
-                {summaryQuery.data.cached ? 'Caché' : 'Nueva'}
-              </Badge>
-            ) : null}
           </div>
           <Button
             variant="outline"
@@ -359,7 +367,11 @@ export function DocumentDetailPage(): JSX.Element {
                 placeholder="Nombre de la etiqueta"
               />
             </div>
-            <Button type="submit" variant="outline" disabled={!newTagName.trim() || createTagMutation.isPending}>
+            <Button
+              type="submit"
+              variant="outline"
+              disabled={!newTagName.trim() || createTagMutation.isPending}
+            >
               {createTagMutation.isPending ? <Spinner /> : <Plus />}
               Crear y asignar
             </Button>
@@ -396,11 +408,11 @@ export function DocumentDetailPage(): JSX.Element {
                   <Badge tone="neutral">{entry.action}</Badge>
                   <div className="min-w-0 flex-1">
                     {entry.detail ? <p className="truncate text-sm">{entry.detail}</p> : null}
-                    {entry.actor ? (
-                      <p className="text-xs text-muted-foreground">{entry.actor}</p>
-                    ) : null}
+                    {entry.actor ? <p className="text-xs text-muted-foreground">{entry.actor}</p> : null}
                   </div>
-                  <span className="shrink-0 text-xs text-muted-foreground">{formatDateTime(entry.createdAt)}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {formatDateTime(entry.createdAt)}
+                  </span>
                 </li>
               ))}
             </ul>

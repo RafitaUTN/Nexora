@@ -11,13 +11,7 @@ import {
   ScanText,
   Timer,
 } from 'lucide-react'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatusBadge } from '@/components/status-badge'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -44,7 +38,11 @@ function StatCard({
         </div>
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">{label}</p>
-          {loading ? <Skeleton className="mt-1 h-6 w-16" /> : <p className="truncate text-xl font-semibold">{value}</p>}
+          {loading ? (
+            <Skeleton className="mt-1 h-6 w-16" />
+          ) : (
+            <p className="truncate text-xl font-semibold">{value}</p>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -88,12 +86,37 @@ export function DashboardPage(): JSX.Element {
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <StatCard label="Documentos" value={s ? String(s.total) : '—'} icon={<FileText />} loading={loading} />
-        <StatCard label="Indexados" value={s ? String(s.indexed) : '—'} icon={<CheckCircle2 />} loading={loading} />
+        <StatCard
+          label="Documentos"
+          value={s ? String(s.total) : '—'}
+          icon={<FileText />}
+          loading={loading}
+        />
+        <StatCard
+          label="Indexados"
+          value={s ? String(s.indexed) : '—'}
+          icon={<CheckCircle2 />}
+          loading={loading}
+        />
         <StatCard label="Pendientes" value={s ? String(s.pending) : '—'} icon={<Timer />} loading={loading} />
-        <StatCard label="Errores" value={s ? String(s.errors) : '—'} icon={<AlertCircle />} loading={loading} />
-        <StatCard label="Duplicados" value={s ? String(s.duplicates) : '—'} icon={<Copy />} loading={loading} />
-        <StatCard label="Tamaño" value={s ? formatBytes(s.totalSizeBytes) : '—'} icon={<HardDrive />} loading={loading} />
+        <StatCard
+          label="Errores"
+          value={s ? String(s.errors) : '—'}
+          icon={<AlertCircle />}
+          loading={loading}
+        />
+        <StatCard
+          label="Duplicados"
+          value={s ? String(s.duplicates) : '—'}
+          icon={<Copy />}
+          loading={loading}
+        />
+        <StatCard
+          label="Tamaño"
+          value={s ? formatBytes(s.totalSizeBytes) : '—'}
+          icon={<HardDrive />}
+          loading={loading}
+        />
       </div>
 
       {s?.total === 0 ? (
@@ -110,8 +133,13 @@ export function DashboardPage(): JSX.Element {
                 </span>
                 <div>
                   <p className="text-sm font-medium">Añade una fuente</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Selecciona la carpeta con tus documentos.</p>
-                  <Link to="/sources" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Selecciona la carpeta con tus documentos.
+                  </p>
+                  <Link
+                    to="/sources"
+                    className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  >
                     Configurar fuentes
                     <ArrowRight className="size-3.5" />
                   </Link>
@@ -126,7 +154,10 @@ export function DashboardPage(): JSX.Element {
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     Extrae texto con OCR y clasifica con IA.
                   </p>
-                  <Link to="/settings" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                  <Link
+                    to="/settings"
+                    className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  >
                     Configurar IA
                     <ArrowRight className="size-3.5" />
                   </Link>
@@ -141,7 +172,10 @@ export function DashboardPage(): JSX.Element {
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     Crea reglas que actúen por ti sobre los documentos.
                   </p>
-                  <Link to="/automations" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                  <Link
+                    to="/automations"
+                    className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  >
                     Crear reglas
                     <ArrowRight className="size-3.5" />
                   </Link>
@@ -183,8 +217,12 @@ export function DashboardPage(): JSX.Element {
                       className="flex items-center gap-3 rounded-md px-2 py-2.5 transition-colors hover:bg-accent"
                     >
                       <FileText className="size-4 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{doc.title ?? doc.filename}</span>
-                      <span className="hidden text-xs text-muted-foreground sm:block">{formatRelative(doc.addedAt)}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                        {doc.title ?? doc.filename}
+                      </span>
+                      <span className="hidden text-xs text-muted-foreground sm:block">
+                        {formatRelative(doc.addedAt)}
+                      </span>
                       <StatusBadge status={doc.status} />
                     </Link>
                   </li>
@@ -225,14 +263,10 @@ export function DashboardPage(): JSX.Element {
               </div>
               <div className="border-t pt-3">
                 <p className="text-xs text-muted-foreground">Uso de IA</p>
-                <div className="mt-2 grid grid-cols-3 gap-2">
+                <div className="mt-2 grid grid-cols-2 gap-2">
                   <div>
                     <p className="text-sm font-semibold">{usage.data?.totalCalls ?? 0}</p>
                     <p className="text-xs text-muted-foreground">Llamadas</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">{usage.data?.totalTokens ?? 0}</p>
-                    <p className="text-xs text-muted-foreground">Tokens</p>
                   </div>
                   <div>
                     <p className="text-sm font-semibold">{formatUsd(usage.data?.totalCostUsd ?? 0)}</p>
@@ -253,7 +287,10 @@ export function DashboardPage(): JSX.Element {
                   {tags.data.map((tag) => (
                     <li key={tag.id} className="flex items-center justify-between text-sm">
                       <span className="flex items-center gap-2">
-                        <span className="size-2 rounded-full" style={{ backgroundColor: tag.color ?? '#64748b' }} />
+                        <span
+                          className="size-2 rounded-full"
+                          style={{ backgroundColor: tag.color ?? '#64748b' }}
+                        />
                         {tag.name}
                       </span>
                       <span className="text-xs text-muted-foreground">{tag.count}</span>

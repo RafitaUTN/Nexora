@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Badge } from '@/components/ui/badge'
 import { useToasts } from '@/lib/toasts'
 
 export function QaPage(): JSX.Element {
@@ -15,8 +14,7 @@ export function QaPage(): JSX.Element {
 
   const qa = useMutation({
     mutationFn: (value: string) => window.api.ai.qa(value),
-    onError: (error: Error) =>
-      push({ kind: 'error', title: 'No se pudo responder', body: error.message }),
+    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo responder', body: error.message }),
   })
 
   const onSubmit = (event: FormEvent): void => {
@@ -62,7 +60,6 @@ export function QaPage(): JSX.Element {
             <div className="flex items-center gap-2">
               <MessageCircleQuestion className="size-4 text-primary" />
               <h2 className="text-base font-semibold">Respuesta</h2>
-              {qa.data.cached ? <Badge tone="neutral">Caché</Badge> : null}
             </div>
             <p className="mt-3 text-sm leading-relaxed">{qa.data.answer}</p>
             {qa.data.citations.length > 0 ? (
@@ -98,8 +95,7 @@ export function QaPage(): JSX.Element {
           <div className="p-6 text-center">
             <MessageCircleQuestion className="mx-auto size-8 text-muted-foreground" />
             <p className="mt-3 text-sm text-muted-foreground">
-              Pregunta sobre el contenido de tu documentación. Las respuestas citan los
-              documentos utilizados.
+              Pregunta sobre el contenido de tu documentación. Las respuestas citan los documentos utilizados.
             </p>
           </div>
         )}

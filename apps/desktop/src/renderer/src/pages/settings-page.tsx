@@ -692,7 +692,7 @@ export function SettingsPage(): JSX.Element {
     onSuccess: (health) => {
       push(
         health.ok
-          ? { kind: 'success', title: 'IA disponible', body: `Latencia ${health.latencyMs} ms` }
+          ? { kind: 'success', title: 'IA disponible' }
           : { kind: 'warning', title: 'IA no disponible', body: health.error ?? 'Sin conexión' },
       )
     },
