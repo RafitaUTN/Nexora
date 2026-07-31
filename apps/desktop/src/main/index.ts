@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, safeStorage } from 'electron'
 import { randomHex } from '@documind/core'
 import { ConsoleLogger } from '@documind/core'
+import { IpcEvent } from '@documind/shared'
 import { createRuntime, type AppRuntime } from './runtime'
 import { registerIpc, wireEvents, type IpcContext } from './ipc'
 import { createMainWindow } from './window'
@@ -10,6 +11,17 @@ import { createMainWindow } from './window'
 let mainWindow: BrowserWindow | null = null
 let runtime: AppRuntime | null = null
 let unsubscribeEvents: (() => void) | null = null
+let unsubscribeUpdates: (() => void) | null = null
+
+/** Reenvía el estado de actualizaciones al renderer. */
+function wireUpdates(): void {
+  unsubscribeUpdates?.()
+  const rt = runtime
+  unsubscribeUpdates = rt ? rt.updates.onStatus((status) => {
+    const win = mainWindow
+    if (win && !win.isDestroyed()) win.webContents.send(IpcEvent.EventUpdateStatus, status)
+  }) : null
+}
 
 /** Secreto maestro cifrado con safeStorage (fallback a fichero plano en dev). */
 function loadMasterSecret(): string {
@@ -49,6 +61,7 @@ const context: IpcContext = {
     })
     unsubscribeEvents?.()
     unsubscribeEvents = wireEvents(runtime.bus, () => mainWindow)
+    wireUpdates()
     return runtime
   },
 }
@@ -96,6 +109,7 @@ if (!gotTheLock) {
       }
       registerIpc(context)
       unsubscribeEvents = wireEvents(runtime.bus, () => mainWindow)
+      wireUpdates()
       mainWindow = createMainWindow()
     } catch (error) {
       console.error('[documind] arranque fallido:', error)
