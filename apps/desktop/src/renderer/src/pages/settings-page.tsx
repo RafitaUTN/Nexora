@@ -1,19 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Cloud,
   Download,
   KeyRound,
   LogOut,
   RefreshCw,
   Save,
   Search,
-  Share2,
   ShieldCheck,
   Sparkles,
   Trash2,
-  UserPlus,
-  UserX,
   Wifi,
 } from 'lucide-react'
 import { IpcEvent } from '@documind/shared'
@@ -25,10 +21,6 @@ import type {
   OcrLanguageInfo,
   OcrLanguageProgress,
   ProviderId,
-  Share,
-  ShareRole,
-  ShareStatus,
-  SyncStatus,
   UpdateStatus,
 } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -60,14 +52,9 @@ interface SettingsForm {
   ocrMaxDpi: string
   telemetry: boolean
   provider: string
-  tokenBudget: string
   sendWholeDocument: boolean
-  maxCacheAgeDays: string
-  requestsPerMinute: string
   autoCheck: boolean
   autoDownload: boolean
-  channel: 'stable' | 'beta'
-  checkIntervalHours: string
 }
 
 function toForm(settings: AppSettings): SettingsForm {
@@ -78,14 +65,9 @@ function toForm(settings: AppSettings): SettingsForm {
     ocrMaxDpi: String(settings.ocrMaxDpi),
     telemetry: settings.telemetry,
     provider: settings.ai.provider ?? '',
-    tokenBudget: String(settings.ai.tokenBudget),
     sendWholeDocument: settings.ai.sendWholeDocument,
-    maxCacheAgeDays: String(settings.ai.maxCacheAgeDays),
-    requestsPerMinute: String(settings.ai.requestsPerMinute),
     autoCheck: settings.updates.autoCheck,
     autoDownload: settings.updates.autoDownload,
-    channel: settings.updates.channel,
-    checkIntervalHours: String(settings.updates.checkIntervalHours),
   }
 }
 
@@ -224,17 +206,6 @@ const TIER_LABELS: Record<LicenseTier, string> = {
   free: 'Gratuita',
   pro: 'Pro',
   enterprise: 'Empresa',
-}
-
-const SHARE_ROLE_LABELS: Record<ShareRole, string> = {
-  viewer: 'Solo lectura',
-  editor: 'Edición',
-}
-
-const SHARE_STATUS_META: Record<ShareStatus, { label: string; tone: 'info' | 'success' | 'error' }> = {
-  invited: { label: 'Invitado', tone: 'info' },
-  active: { label: 'Activo', tone: 'success' },
-  revoked: { label: 'Revocado', tone: 'error' },
 }
 
 const LICENSE_STATUS_META: Record<
@@ -402,462 +373,6 @@ function UpdatesSection(): JSX.Element {
           {installMutation.isPending ? <Spinner /> : <Download />}
           Reiniciar e instalar
         </Button>
-      ) : null}
-    </div>
-  )
-}
-
-function SyncSection(): JSX.Element {
-  const queryClient = useQueryClient()
-  const push = useToasts((s) => s.push)
-  const currentUser = useAuth((s) => s.currentUser)
-  const isAdmin = currentUser?.role === 'admin'
-  const [url, setUrl] = useState('')
-  const [anonKey, setAnonKey] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-
-  const sync = useQuery({ queryKey: queryKeys.sync, queryFn: () => window.api.sync.status() })
-
-  const setEnabledMutation = useMutation({
-    mutationFn: (enabled: boolean) => window.api.sync.setEnabled(enabled),
-    onSuccess: (status) => {
-      void queryClient.setQueryData<SyncStatus>(queryKeys.sync, status)
-      push({
-        kind: 'success',
-        title: status.enabled ? 'Sincronización habilitada' : 'Sincronización deshabilitada',
-      })
-    },
-    onError: (error: Error) =>
-      push({ kind: 'error', title: 'No se pudo cambiar el estado', body: error.message }),
-  })
-
-  const configureMutation = useMutation({
-    mutationFn: () => window.api.sync.configure(url.trim(), anonKey.trim(), email.trim(), password),
-    onSuccess: (status) => {
-      void queryClient.setQueryData<SyncStatus>(queryKeys.sync, status)
-      setUrl('')
-      setAnonKey('')
-      setEmail('')
-      setPassword('')
-      push({ kind: 'success', title: 'Cuenta conectada', body: `Sincronizando como ${status.email}` })
-    },
-    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo conectar', body: error.message }),
-  })
-
-  const signUpMutation = useMutation({
-    mutationFn: () => window.api.sync.signUp(url.trim(), anonKey.trim(), email.trim(), password),
-    onSuccess: (result) => {
-      if (result.status) void queryClient.setQueryData<SyncStatus>(queryKeys.sync, result.status)
-      push(
-        result.confirmationRequired
-          ? {
-              kind: 'info',
-              title: 'Confirmación de correo pendiente',
-              body: 'Confirma el correo en Supabase y luego conecta la cuenta aquí.',
-            }
-          : { kind: 'success', title: 'Cuenta creada y conectada' },
-      )
-    },
-    onError: (error: Error) =>
-      push({ kind: 'error', title: 'No se pudo crear la cuenta', body: error.message }),
-  })
-
-  const signOutMutation = useMutation({
-    mutationFn: () => window.api.sync.signOut(),
-    onSuccess: (status) => {
-      void queryClient.setQueryData<SyncStatus>(queryKeys.sync, status)
-      push({ kind: 'success', title: 'Cuenta desconectada' })
-    },
-    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo desconectar', body: error.message }),
-  })
-
-  const pingMutation = useMutation({
-    mutationFn: () => window.api.sync.ping(),
-    onSuccess: () => push({ kind: 'success', title: 'Servidor alcanzable' }),
-    onError: (error: Error) =>
-      push({ kind: 'error', title: 'No se pudo contactar con el servidor', body: error.message }),
-  })
-
-  const runMutation = useMutation({
-    mutationFn: () => window.api.sync.run(),
-    onSuccess: (result) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.sync })
-      push({
-        kind: 'success',
-        title: 'Sincronización completada',
-        body: `${result.pushed} subidos · ${result.pulled} recibidos · ${result.applied} aplicados`,
-      })
-    },
-    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo sincronizar', body: error.message }),
-  })
-
-  const status = sync.data
-  const configured = status?.configured ?? false
-  const authenticated = status?.authenticated ?? false
-
-  return (
-    <div className="space-y-4 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Badge tone={status?.enabled ? 'success' : 'neutral'}>
-            {status?.enabled ? 'Habilitada' : 'Deshabilitada'}
-          </Badge>
-          <Badge tone={configured ? 'info' : 'neutral'}>
-            {configured ? 'Configurada' : 'Sin configurar'}
-          </Badge>
-          {authenticated ? (
-            <Badge tone="success">Cuenta: {status?.email}</Badge>
-          ) : configured ? (
-            <Badge tone="warning">Sin cuenta conectada</Badge>
-          ) : null}
-          {status?.deviceId ? (
-            <p className="text-xs text-muted-foreground">Dispositivo {status.deviceId.slice(0, 8)}</p>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => pingMutation.mutate()}
-            disabled={pingMutation.isPending || !configured}
-          >
-            {pingMutation.isPending ? <Spinner /> : <Wifi />}
-            Probar conexión
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => runMutation.mutate()}
-            disabled={runMutation.isPending || !configured || !status?.enabled}
-          >
-            {runMutation.isPending ? <Spinner /> : <RefreshCw />}
-            Sincronizar ahora
-          </Button>
-          {authenticated ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => signOutMutation.mutate()}
-              disabled={signOutMutation.isPending}
-            >
-              {signOutMutation.isPending ? <Spinner /> : <LogOut />}
-              Desconectar
-            </Button>
-          ) : null}
-        </div>
-      </div>
-
-      {status?.pending !== undefined && status.pending > 0 ? (
-        <p className="text-xs text-muted-foreground">{status.pending} cambios locales pendientes de subir</p>
-      ) : null}
-
-      {isAdmin ? (
-        <>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-0 flex-1 basis-56 space-y-1.5">
-              <Label htmlFor="sync-url">URL del proyecto Supabase</Label>
-              <Input
-                id="sync-url"
-                type="text"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://xxxx.supabase.co"
-                disabled={configureMutation.isPending}
-              />
-            </div>
-            <div className="min-w-0 flex-1 basis-56 space-y-1.5">
-              <Label htmlFor="sync-anon-key">Clave anon (publishable)</Label>
-              <Input
-                id="sync-anon-key"
-                type="password"
-                value={anonKey}
-                onChange={(e) => setAnonKey(e.target.value)}
-                placeholder="eyJhbGciOiJIUzI1NiIs…"
-                disabled={configureMutation.isPending}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-0 flex-1 basis-56 space-y-1.5">
-              <Label htmlFor="sync-email">Correo de la cuenta Supabase</Label>
-              <Input
-                id="sync-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="usuario@ejemplo.com"
-                disabled={configureMutation.isPending || signUpMutation.isPending}
-              />
-            </div>
-            <div className="min-w-0 flex-1 basis-56 space-y-1.5">
-              <Label htmlFor="sync-password">Contraseña</Label>
-              <Input
-                id="sync-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                disabled={configureMutation.isPending || signUpMutation.isPending}
-              />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => configureMutation.mutate()}
-              disabled={
-                !url.trim() ||
-                !anonKey.trim() ||
-                !email.trim() ||
-                !password ||
-                configureMutation.isPending ||
-                signUpMutation.isPending
-              }
-            >
-              {configureMutation.isPending ? <Spinner /> : <Cloud />}
-              Conectar cuenta
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => signUpMutation.mutate()}
-              disabled={
-                !url.trim() ||
-                !anonKey.trim() ||
-                !email.trim() ||
-                password.length < 8 ||
-                configureMutation.isPending ||
-                signUpMutation.isPending
-              }
-            >
-              {signUpMutation.isPending ? <Spinner /> : <KeyRound />}
-              Crear cuenta
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            La contraseña se usa una sola vez para obtener la sesión de Supabase; solo se guarda el token
-            cifrado en este dispositivo.
-          </p>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium">Sincronización activa</p>
-              <p className="text-xs text-muted-foreground">
-                Replica documentos, etiquetas y asignaciones entre dispositivos (LWW)
-              </p>
-            </div>
-            <Switch
-              checked={status?.enabled ?? false}
-              onCheckedChange={(checked) => setEnabledMutation.mutate(checked)}
-              disabled={!configured || setEnabledMutation.isPending}
-            />
-          </div>
-        </>
-      ) : null}
-    </div>
-  )
-}
-
-function SharesSection(): JSX.Element {
-  const queryClient = useQueryClient()
-  const push = useToasts((s) => s.push)
-  const currentUser = useAuth((s) => s.currentUser)
-  const isAdmin = currentUser?.role === 'admin'
-  const [memberEmail, setMemberEmail] = useState('')
-  const [role, setRole] = useState<ShareRole>('viewer')
-
-  const sync = useQuery({ queryKey: queryKeys.sync, queryFn: () => window.api.sync.status() })
-  const outgoing = useQuery({
-    queryKey: queryKeys.sharesOutgoing,
-    queryFn: () => window.api.shares.outgoing(),
-  })
-  const incoming = useQuery({
-    queryKey: queryKeys.sharesIncoming,
-    queryFn: () => window.api.shares.incoming(),
-  })
-
-  useEffect(
-    () =>
-      window.api.on(
-        IpcEvent.EventSharesChanged,
-        () => void queryClient.invalidateQueries({ queryKey: queryKeys.shares }),
-      ),
-    [queryClient],
-  )
-
-  const invalidate = (): void => void queryClient.invalidateQueries({ queryKey: queryKeys.shares })
-
-  const inviteMutation = useMutation({
-    mutationFn: () => window.api.shares.invite(memberEmail.trim(), role),
-    onSuccess: (share: Share) => {
-      invalidate()
-      setMemberEmail('')
-      push({
-        kind: 'success',
-        title: 'Invitación enviada',
-        body: `${share.memberEmail} · ${SHARE_ROLE_LABELS[share.role]}`,
-      })
-    },
-    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo invitar', body: error.message }),
-  })
-
-  const acceptMutation = useMutation({
-    mutationFn: (uid: string) => window.api.shares.accept(uid),
-    onSuccess: (share: Share) => {
-      invalidate()
-      push({ kind: 'success', title: 'Biblioteca aceptada', body: share.ownerEmail })
-    },
-    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo aceptar', body: error.message }),
-  })
-
-  const revokeMutation = useMutation({
-    mutationFn: (uid: string) => window.api.shares.revoke(uid),
-    onSuccess: (share: Share) => {
-      invalidate()
-      push({ kind: 'success', title: 'Acceso revocado', body: share.memberEmail })
-    },
-    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo revocar', body: error.message }),
-  })
-
-  const setRoleMutation = useMutation({
-    mutationFn: (payload: { uid: string; role: ShareRole }) =>
-      window.api.shares.setRole(payload.uid, payload.role),
-    onSuccess: (share: Share) => {
-      invalidate()
-      push({
-        kind: 'success',
-        title: 'Rol actualizado',
-        body: `${share.memberEmail} · ${SHARE_ROLE_LABELS[share.role]}`,
-      })
-    },
-    onError: (error: Error) =>
-      push({ kind: 'error', title: 'No se pudo cambiar el rol', body: error.message }),
-  })
-
-  const authenticated = sync.data?.authenticated ?? false
-  const pending = (incoming.data ?? []).filter((s) => s.status === 'invited')
-  const activeOutgoing = (outgoing.data ?? []).filter((s) => s.status !== 'revoked')
-
-  if (!authenticated) {
-    return (
-      <div className="p-4">
-        <p className="text-sm text-muted-foreground">
-          Conecta una cuenta de sincronización para compartir tu biblioteca con otros usuarios.
-        </p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-4 p-4">
-      {pending.length > 0 ? (
-        <div className="space-y-2">
-          <p className="text-sm font-medium">Invitaciones recibidas</p>
-          {pending.map((share) => (
-            <div
-              key={share.uid}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium">{share.ownerEmail}</p>
-                <p className="text-xs text-muted-foreground">
-                  Te ha invitado a su biblioteca · {SHARE_ROLE_LABELS[share.role]}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                onClick={() => acceptMutation.mutate(share.uid)}
-                disabled={acceptMutation.isPending}
-              >
-                {acceptMutation.isPending ? <Spinner /> : <UserPlus />}
-                Aceptar
-              </Button>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {isAdmin ? (
-        <>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-0 flex-1 basis-56 space-y-1.5">
-              <Label htmlFor="share-email">Correo del usuario invitado</Label>
-              <Input
-                id="share-email"
-                type="email"
-                value={memberEmail}
-                onChange={(e) => setMemberEmail(e.target.value)}
-                placeholder="usuario@ejemplo.com"
-                disabled={inviteMutation.isPending}
-              />
-            </div>
-            <div className="min-w-0 flex-1 basis-40 space-y-1.5">
-              <Label htmlFor="share-role">Acceso</Label>
-              <Select id="share-role" value={role} onChange={(e) => setRole(e.target.value as ShareRole)}>
-                <option value="viewer">Solo lectura</option>
-                <option value="editor">Edición</option>
-              </Select>
-            </div>
-            <Button
-              size="sm"
-              onClick={() => inviteMutation.mutate()}
-              disabled={!memberEmail.trim() || inviteMutation.isPending}
-            >
-              {inviteMutation.isPending ? <Spinner /> : <UserPlus />}
-              Invitar
-            </Button>
-          </div>
-
-          {activeOutgoing.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Compartida con</p>
-              {activeOutgoing.map((share) => {
-                const meta = SHARE_STATUS_META[share.status]
-                return (
-                  <div
-                    key={share.uid}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
-                  >
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium">{share.memberEmail}</p>
-                      <Badge tone={meta.tone}>{meta.label}</Badge>
-                      <Badge tone={share.role === 'editor' ? 'info' : 'neutral'}>
-                        {SHARE_ROLE_LABELS[share.role]}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Select
-                        aria-label={`Rol de ${share.memberEmail}`}
-                        value={share.role}
-                        onChange={(e) =>
-                          setRoleMutation.mutate({ uid: share.uid, role: e.target.value as ShareRole })
-                        }
-                        className="w-36"
-                      >
-                        <option value="viewer">Solo lectura</option>
-                        <option value="editor">Edición</option>
-                      </Select>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Revocar acceso a ${share.memberEmail}`}
-                        disabled={revokeMutation.isPending}
-                        onClick={() => revokeMutation.mutate(share.uid)}
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        <UserX />
-                      </Button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Aún no compartes tu biblioteca. Invita a un usuario por correo para que pueda leerla (o
-              editarla) desde su dispositivo.
-            </p>
-          )}
-        </>
       ) : null}
     </div>
   )
@@ -1154,16 +669,11 @@ export function SettingsPage(): JSX.Element {
         telemetry: form.telemetry,
         ai: {
           provider: (form.provider || null) as ProviderId | null,
-          tokenBudget: Number(form.tokenBudget),
           sendWholeDocument: form.sendWholeDocument,
-          maxCacheAgeDays: Number(form.maxCacheAgeDays),
-          requestsPerMinute: Number(form.requestsPerMinute),
         },
         updates: {
           autoCheck: form.autoCheck,
           autoDownload: form.autoDownload,
-          channel: form.channel,
-          checkIntervalHours: Number(form.checkIntervalHours),
         },
       })
     },
@@ -1293,40 +803,12 @@ export function SettingsPage(): JSX.Element {
             </Select>
           </div>
           <AiModelRow provider={settings.data?.ai.provider ?? null} />
-          <div className="space-y-1.5">
-            <Label htmlFor="settings-token-budget">Presupuesto de tokens</Label>
-            <Input
-              id="settings-token-budget"
-              type="number"
-              min={256}
-              max={64000}
-              value={form.tokenBudget}
-              onChange={(e) => set('tokenBudget', e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="settings-cache-days">Validez de caché (días)</Label>
-            <Input
-              id="settings-cache-days"
-              type="number"
-              min={1}
-              max={365}
-              value={form.maxCacheAgeDays}
-              onChange={(e) => set('maxCacheAgeDays', e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="settings-rpm">Peticiones por minuto</Label>
-            <Input
-              id="settings-rpm"
-              type="number"
-              min={1}
-              max={600}
-              value={form.requestsPerMinute}
-              onChange={(e) => set('requestsPerMinute', e.target.value)}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-4">
+          {form.provider && form.provider !== 'ollama' ? (
+            <div className="sm:col-span-2">
+              <ProviderApiKeyRow provider={form.provider as ProviderId} />
+            </div>
+          ) : null}
+          <div className="flex items-center justify-between gap-4 sm:col-span-2">
             <div>
               <p className="text-sm font-medium">Enviar documento completo</p>
               <p className="text-xs text-muted-foreground">Si no, se envía un extracto</p>
@@ -1348,28 +830,6 @@ export function SettingsPage(): JSX.Element {
         </div>
         <UpdatesSection />
         <div className="grid gap-4 border-t p-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="settings-updates-channel">Canal</Label>
-            <Select
-              id="settings-updates-channel"
-              value={form.channel}
-              onChange={(e) => set('channel', e.target.value as SettingsForm['channel'])}
-            >
-              <option value="stable">Estable</option>
-              <option value="beta">Beta</option>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="settings-updates-interval">Comprobar cada (horas, 1–168)</Label>
-            <Input
-              id="settings-updates-interval"
-              type="number"
-              min={1}
-              max={168}
-              value={form.checkIntervalHours}
-              onChange={(e) => set('checkIntervalHours', e.target.value)}
-            />
-          </div>
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium">Comprobar automáticamente</p>
@@ -1398,44 +858,6 @@ export function SettingsPage(): JSX.Element {
           </p>
         </div>
         <LicenseSection />
-      </section>
-
-      <section className="rounded-lg border bg-card">
-        <div className="border-b p-4">
-          <div className="flex items-center gap-2">
-            <Cloud className="size-4 text-muted-foreground" />
-            <h2 className="text-base font-semibold">Sincronización</h2>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Replica tu biblioteca entre dispositivos mediante Supabase/Postgres.
-          </p>
-        </div>
-        <SyncSection />
-      </section>
-
-      <section className="rounded-lg border bg-card">
-        <div className="border-b p-4">
-          <div className="flex items-center gap-2">
-            <Share2 className="size-4 text-muted-foreground" />
-            <h2 className="text-base font-semibold">Compartir</h2>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Invita a otros usuarios a acceder a tu biblioteca desde sus dispositivos.
-          </p>
-        </div>
-        <SharesSection />
-      </section>
-
-      <section className="rounded-lg border bg-card">
-        <div className="border-b p-4">
-          <h2 className="text-base font-semibold">Claves de API</h2>
-          <p className="text-xs text-muted-foreground">Se guardan de forma segura en el sistema.</p>
-        </div>
-        <div className="divide-y">
-          {PROVIDERS.map((provider) => (
-            <ProviderApiKeyRow key={provider} provider={provider} />
-          ))}
-        </div>
       </section>
     </div>
   )
