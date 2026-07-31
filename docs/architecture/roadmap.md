@@ -105,5 +105,12 @@
 - Evento `EventGlobalSearch` en `IpcEvent`; suscripción en `AppShell`.
 - E2E ampliado: abre el overlay con Ctrl+K, busca por contenido, selecciona y navega al detalle.
 
+### FASE 13 — Sincronización entre dispositivos (Supabase/Postgres)
+- ADR-0013: LWW por `updatedAtMs`; outbox local llenado por triggers SQLite (migración 007 `sync_outbox` + `sync_meta`); borrados como tombstones; claves compuestas `entity:entityKey`; configuración en `settings` (`sync.settings`); `anonKey` publicable (RLS pendiente en el esquema remoto de desarrollo).
+- Dominio: `entities/sync`, `ports/sync` (`SyncLocalStore`/`SyncRemoteStore`), `SyncService` (`sync` idempotente, `ping`, `status`, `setEnabled`, `configure`).
+- Core: `SqliteSyncLocalStore`, `SupabaseSyncStore` (PostgREST con `fetch`); triggers AFTER INSERT/UPDATE/DELETE en documents/tags/document_tags (+ contents).
+- Integración: canales `sync:status|setEnabled|configure|run|ping` (viewer lectura, editor run, admin configure/setEnabled, con auditoría); UI «Sincronización» en Ajustes.
+- Verificación: 233 tests, cobertura 91.95/80.26/92.03/94; typecheck, lint, build y smoke OK.
+
 ## Post-MVP
-- Sincronización Supabase/Postgres, colaboración.
+- Colaboración (políticas RLS por usuario), auto-sync en segundo plano, resolución de conflictos por campos.

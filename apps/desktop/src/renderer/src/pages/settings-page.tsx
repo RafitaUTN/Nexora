@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, KeyRound, LogOut, RefreshCw, Save, ShieldCheck, Trash2, Wifi } from 'lucide-react'
+import { Cloud, Download, KeyRound, LogOut, RefreshCw, Save, ShieldCheck, Trash2, Wifi } from 'lucide-react'
 import { IpcEvent } from '@documind/shared'
-import type { AppSettings, License, LicenseKey, LicenseTier, ProviderId, UpdateStatus } from '@/types'
+import type { AppSettings, License, LicenseKey, LicenseTier, ProviderId, SyncStatus, UpdateStatus } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -315,6 +315,155 @@ function UpdatesSection(): JSX.Element {
   )
 }
 
+function SyncSection(): JSX.Element {
+  const queryClient = useQueryClient()
+  const push = useToasts((s) => s.push)
+  const currentUser = useAuth((s) => s.currentUser)
+  const isAdmin = currentUser?.role === 'admin'
+  const [url, setUrl] = useState('')
+  const [anonKey, setAnonKey] = useState('')
+
+  const sync = useQuery({ queryKey: queryKeys.sync, queryFn: () => window.api.sync.status() })
+
+  const setEnabledMutation = useMutation({
+    mutationFn: (enabled: boolean) => window.api.sync.setEnabled(enabled),
+    onSuccess: (status) => {
+      void queryClient.setQueryData<SyncStatus>(queryKeys.sync, status)
+      push({ kind: 'success', title: status.enabled ? 'Sincronización habilitada' : 'Sincronización deshabilitada' })
+    },
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo cambiar el estado', body: error.message }),
+  })
+
+  const configureMutation = useMutation({
+    mutationFn: () => window.api.sync.configure(url.trim(), anonKey.trim()),
+    onSuccess: (status) => {
+      void queryClient.setQueryData<SyncStatus>(queryKeys.sync, status)
+      setUrl('')
+      setAnonKey('')
+      push({ kind: 'success', title: 'Servidor de sincronización configurado' })
+    },
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo configurar', body: error.message }),
+  })
+
+  const pingMutation = useMutation({
+    mutationFn: () => window.api.sync.ping(),
+    onSuccess: () => push({ kind: 'success', title: 'Servidor alcanzable' }),
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo contactar con el servidor', body: error.message }),
+  })
+
+  const runMutation = useMutation({
+    mutationFn: () => window.api.sync.run(),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sync })
+      push({
+        kind: 'success',
+        title: 'Sincronización completada',
+        body: `${result.pushed} subidos · ${result.pulled} recibidos · ${result.applied} aplicados`,
+      })
+    },
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo sincronizar', body: error.message }),
+  })
+
+  const status = sync.data
+  const configured = status?.configured ?? false
+
+  return (
+    <div className="space-y-4 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Badge tone={status?.enabled ? 'success' : 'neutral'}>
+            {status?.enabled ? 'Habilitada' : 'Deshabilitada'}
+          </Badge>
+          <Badge tone={configured ? 'info' : 'neutral'}>
+            {configured ? 'Configurada' : 'Sin configurar'}
+          </Badge>
+          {status?.deviceId ? (
+            <p className="text-xs text-muted-foreground">Dispositivo {status.deviceId.slice(0, 8)}</p>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => pingMutation.mutate()}
+            disabled={pingMutation.isPending || !configured}
+          >
+            {pingMutation.isPending ? <Spinner /> : <Wifi />}
+            Probar conexión
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => runMutation.mutate()}
+            disabled={runMutation.isPending || !configured || !status?.enabled}
+          >
+            {runMutation.isPending ? <Spinner /> : <RefreshCw />}
+            Sincronizar ahora
+          </Button>
+        </div>
+      </div>
+
+      {status?.pending !== undefined && status.pending > 0 ? (
+        <p className="text-xs text-muted-foreground">{status.pending} cambios locales pendientes de subir</p>
+      ) : null}
+
+      {isAdmin ? (
+        <>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-0 flex-1 basis-56 space-y-1.5">
+              <Label htmlFor="sync-url">URL del proyecto Supabase</Label>
+              <Input
+                id="sync-url"
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://xxxx.supabase.co"
+                disabled={configureMutation.isPending}
+              />
+            </div>
+            <div className="min-w-0 flex-1 basis-56 space-y-1.5">
+              <Label htmlFor="sync-anon-key">Clave anon (publishable)</Label>
+              <Input
+                id="sync-anon-key"
+                type="password"
+                value={anonKey}
+                onChange={(e) => setAnonKey(e.target.value)}
+                placeholder="eyJhbGciOiJIUzI1NiIs…"
+                disabled={configureMutation.isPending}
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => configureMutation.mutate()}
+              disabled={!url.trim() || !anonKey.trim() || configureMutation.isPending}
+            >
+              {configureMutation.isPending ? <Spinner /> : <Cloud />}
+              Guardar servidor
+            </Button>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium">Sincronización activa</p>
+              <p className="text-xs text-muted-foreground">
+                Replica documentos, etiquetas y asignaciones entre dispositivos (LWW)
+              </p>
+            </div>
+            <Switch
+              checked={status?.enabled ?? false}
+              onCheckedChange={(checked) => setEnabledMutation.mutate(checked)}
+              disabled={!configured || setEnabledMutation.isPending}
+            />
+          </div>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
 export function SettingsPage(): JSX.Element {
   const queryClient = useQueryClient()
   const push = useToasts((s) => s.push)
@@ -620,6 +769,19 @@ export function SettingsPage(): JSX.Element {
           </p>
         </div>
         <LicenseSection />
+      </section>
+
+      <section className="rounded-lg border bg-card">
+        <div className="border-b p-4">
+          <div className="flex items-center gap-2">
+            <Cloud className="size-4 text-muted-foreground" />
+            <h2 className="text-base font-semibold">Sincronización</h2>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Replica tu biblioteca entre dispositivos mediante Supabase/Postgres.
+          </p>
+        </div>
+        <SyncSection />
       </section>
 
       <section className="rounded-lg border bg-card">

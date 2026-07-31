@@ -17,6 +17,8 @@ import type {
   PublicUser,
   RegisterUserInput,
   Role,
+  SyncResult,
+  SyncStatus,
   Tag,
 } from '@documind/domain'
 import type { IpcEvent } from '@documind/shared'
@@ -164,6 +166,13 @@ export interface DocuMindApi {
     status(): Promise<License>
     activate(key: LicenseKey): Promise<License>
     deactivate(): Promise<{ ok: boolean }>
+  }
+  sync: {
+    status(): Promise<SyncStatus>
+    setEnabled(enabled: boolean): Promise<SyncStatus>
+    configure(url: string, anonKey: string): Promise<SyncStatus>
+    run(): Promise<SyncResult>
+    ping(): Promise<{ ok: boolean }>
   }
   on<T>(channel: IpcEvent, callback: (payload: T) => void): () => void
 }

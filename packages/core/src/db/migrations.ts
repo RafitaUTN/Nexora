@@ -302,6 +302,103 @@ export const migrations: Migration[] = [
       ALTER TABLE licenses ADD COLUMN max_devices INTEGER;
     `,
   },
+  {
+    version: 7,
+    name: 'sync_outbox',
+    up: `
+      CREATE TABLE IF NOT EXISTS sync_outbox (
+        entity       TEXT NOT NULL,
+        entity_key   TEXT NOT NULL,
+        op           TEXT NOT NULL,
+        updated_at_ms INTEGER NOT NULL,
+        synced       INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (entity, entity_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_sync_outbox_unsynced ON sync_outbox(synced, updated_at_ms);
+
+      CREATE TABLE IF NOT EXISTS sync_meta (
+        entity    TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        local_id  TEXT NOT NULL,
+        mapped_id INTEGER NOT NULL,
+        PRIMARY KEY (entity, device_id, local_id)
+      );
+
+      CREATE TRIGGER IF NOT EXISTS sync_documents_ai AFTER INSERT ON documents BEGIN
+        INSERT INTO sync_outbox (entity, entity_key, op, updated_at_ms, synced)
+        VALUES ('document', CAST(new.id AS TEXT), 'upsert',
+                CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER), 0)
+        ON CONFLICT(entity, entity_key) DO UPDATE SET
+          op = excluded.op, updated_at_ms = excluded.updated_at_ms, synced = 0;
+      END;
+      CREATE TRIGGER IF NOT EXISTS sync_documents_au AFTER UPDATE ON documents BEGIN
+        INSERT INTO sync_outbox (entity, entity_key, op, updated_at_ms, synced)
+        VALUES ('document', CAST(new.id AS TEXT), 'upsert',
+                CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER), 0)
+        ON CONFLICT(entity, entity_key) DO UPDATE SET
+          op = excluded.op, updated_at_ms = excluded.updated_at_ms, synced = 0;
+      END;
+      CREATE TRIGGER IF NOT EXISTS sync_documents_ad AFTER DELETE ON documents BEGIN
+        INSERT INTO sync_outbox (entity, entity_key, op, updated_at_ms, synced)
+        VALUES ('document', CAST(old.id AS TEXT), 'delete',
+                CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER), 0)
+        ON CONFLICT(entity, entity_key) DO UPDATE SET
+          op = excluded.op, updated_at_ms = excluded.updated_at_ms, synced = 0;
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS sync_contents_ai AFTER INSERT ON document_contents BEGIN
+        INSERT INTO sync_outbox (entity, entity_key, op, updated_at_ms, synced)
+        VALUES ('document', CAST(new.document_id AS TEXT), 'upsert',
+                CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER), 0)
+        ON CONFLICT(entity, entity_key) DO UPDATE SET
+          op = excluded.op, updated_at_ms = excluded.updated_at_ms, synced = 0;
+      END;
+      CREATE TRIGGER IF NOT EXISTS sync_contents_au AFTER UPDATE ON document_contents BEGIN
+        INSERT INTO sync_outbox (entity, entity_key, op, updated_at_ms, synced)
+        VALUES ('document', CAST(new.document_id AS TEXT), 'upsert',
+                CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER), 0)
+        ON CONFLICT(entity, entity_key) DO UPDATE SET
+          op = excluded.op, updated_at_ms = excluded.updated_at_ms, synced = 0;
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS sync_tags_ai AFTER INSERT ON tags BEGIN
+        INSERT INTO sync_outbox (entity, entity_key, op, updated_at_ms, synced)
+        VALUES ('tag', CAST(new.id AS TEXT), 'upsert',
+                CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER), 0)
+        ON CONFLICT(entity, entity_key) DO UPDATE SET
+          op = excluded.op, updated_at_ms = excluded.updated_at_ms, synced = 0;
+      END;
+      CREATE TRIGGER IF NOT EXISTS sync_tags_au AFTER UPDATE ON tags BEGIN
+        INSERT INTO sync_outbox (entity, entity_key, op, updated_at_ms, synced)
+        VALUES ('tag', CAST(new.id AS TEXT), 'upsert',
+                CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER), 0)
+        ON CONFLICT(entity, entity_key) DO UPDATE SET
+          op = excluded.op, updated_at_ms = excluded.updated_at_ms, synced = 0;
+      END;
+      CREATE TRIGGER IF NOT EXISTS sync_tags_ad AFTER DELETE ON tags BEGIN
+        INSERT INTO sync_outbox (entity, entity_key, op, updated_at_ms, synced)
+        VALUES ('tag', CAST(old.id AS TEXT), 'delete',
+                CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER), 0)
+        ON CONFLICT(entity, entity_key) DO UPDATE SET
+          op = excluded.op, updated_at_ms = excluded.updated_at_ms, synced = 0;
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS sync_assignments_ai AFTER INSERT ON document_tags BEGIN
+        INSERT INTO sync_outbox (entity, entity_key, op, updated_at_ms, synced)
+        VALUES ('assignment', CAST(new.document_id AS TEXT) || ':' || CAST(new.tag_id AS TEXT), 'upsert',
+                CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER), 0)
+        ON CONFLICT(entity, entity_key) DO UPDATE SET
+          op = excluded.op, updated_at_ms = excluded.updated_at_ms, synced = 0;
+      END;
+      CREATE TRIGGER IF NOT EXISTS sync_assignments_ad AFTER DELETE ON document_tags BEGIN
+        INSERT INTO sync_outbox (entity, entity_key, op, updated_at_ms, synced)
+        VALUES ('assignment', CAST(old.document_id AS TEXT) || ':' || CAST(old.tag_id AS TEXT), 'delete',
+                CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER), 0)
+        ON CONFLICT(entity, entity_key) DO UPDATE SET
+          op = excluded.op, updated_at_ms = excluded.updated_at_ms, synced = 0;
+      END;
+    `,
+  },
 ]
 
 export function runMigrations(db: SqliteDatabase, list: Migration[] = migrations): void {

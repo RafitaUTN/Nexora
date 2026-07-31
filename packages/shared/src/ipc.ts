@@ -84,6 +84,13 @@ export const IpcChannel = {
   LicenseStatus: 'license:status',
   LicenseActivate: 'license:activate',
   LicenseDeactivate: 'license:deactivate',
+
+  // Sync (sincronización con Supabase/Postgres)
+  SyncStatus: 'sync:status',
+  SyncSetEnabled: 'sync:setEnabled',
+  SyncConfigure: 'sync:configure',
+  SyncRun: 'sync:run',
+  SyncPing: 'sync:ping',
 } as const
 
 export type IpcChannel = (typeof IpcChannel)[keyof typeof IpcChannel]

@@ -7,9 +7,11 @@ export * from './entities/ocr'
 export * from './entities/automation'
 export * from './entities/settings'
 export * from './entities/license'
+export * from './entities/sync'
 export * from './entities/user'
 
 export * from './ports/repositories'
+export * from './ports/sync'
 export * from './ports/ai-provider'
 export * from './ports/ai-contracts'
 export * from './ports/ocr-engine'
@@ -29,3 +31,6 @@ export * from './services/settings-service'
 export * from './services/automation-service'
 export * from './services/auth-service'
 export * from './services/license-service'
+export * from './services/sync-service'
+
+

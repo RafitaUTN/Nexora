@@ -4,6 +4,7 @@ import { basename } from 'node:path'
 import type { EventBus, PublicUser, Role } from '@documind/domain'
 import {
   AuthError,
+  SyncError,
   appSettingsSchema,
   documentFilterSchema,
   loginSchema,
@@ -471,6 +472,47 @@ export function registerIpc(context: IpcContext): void {
     requireRole('admin')
     await rt().license.deactivate()
     await rt().auditService.record({ action: 'license.deactivate', entityType: 'license' })
+    return { ok: true }
+  })
+
+  // Sync (sincronización con Supabase/Postgres). Configurar el servidor y
+  // activar la sincronización requiere rol admin; ejecutar el ciclo de sync
+  // lo puede lanzar cualquier editor (afecta solo a sus propios documentos).
+  handle(IpcChannel.SyncStatus, async () => {
+    requireRole('viewer')
+    return rt().sync.status()
+  })
+  handle(IpcChannel.SyncSetEnabled, async (enabled: unknown) => {
+    requireRole('admin')
+    const status = await rt().sync.setEnabled(Boolean(enabled))
+    await rt().auditService.record({
+      action: 'sync.setEnabled',
+      detail: status.enabled ? 'habilitada' : 'deshabilitada',
+    })
+    return status
+  })
+  handle(IpcChannel.SyncConfigure, async (payload: { url?: unknown; anonKey?: unknown }) => {
+    requireRole('admin')
+    const url = String(payload?.url ?? '').trim()
+    const anonKey = String(payload?.anonKey ?? '').trim()
+    if (!url) throw new SyncError('URL del proyecto Supabase requerida', 'ERR_SYNC_NOT_CONFIGURED')
+    if (!anonKey) throw new SyncError('Clave anon del proyecto requerida', 'ERR_SYNC_NOT_CONFIGURED')
+    const status = await rt().sync.configure(url, anonKey)
+    await rt().auditService.record({ action: 'sync.configure', detail: status.url })
+    return status
+  })
+  handle(IpcChannel.SyncRun, async () => {
+    requireRole('editor')
+    const result = await rt().sync.sync()
+    await rt().auditService.record({
+      action: 'sync.run',
+      detail: `subidos ${result.pushed} · recibidos ${result.pulled} · aplicados ${result.applied}`,
+    })
+    return result
+  })
+  handle(IpcChannel.SyncPing, async () => {
+    requireRole('viewer')
+    await rt().sync.ping()
     return { ok: true }
   })
 }

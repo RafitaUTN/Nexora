@@ -19,7 +19,11 @@ import {
   LicenseService,
   SearchService,
   SettingsService,
+  SyncService,
   TagService,
+  SyncError,
+  type SyncChange,
+  type SyncRemoteStore,
 } from '@documind/domain'
 import { createAIProvider } from '@documind/ai'
 import { ExtractionService } from '@documind/document'
@@ -49,6 +53,8 @@ import {
   SqliteSourceRepository,
   SqliteTagRepository,
   SqliteUserRepository,
+  SqliteSyncLocalStore,
+  SupabaseSyncStore,
   randomHex,
   runMigrations,
   type Logger,
@@ -105,6 +111,7 @@ export interface AppRuntime {
   classificationService: ClassificationService
   auth: SessionManager
   license: LicenseService
+  sync: SyncService
   indexing: IndexingService
   ocrEngine: OCREngine | null
   watcher: FileWatcher
@@ -208,14 +215,60 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
   )
   const auth = new SessionManager(authService, secretStore)
 
+  // Identificador de instalación estable (licencias y sincronización).
+  const deviceId = deviceIdOf(userDataPath)
+
   const license = new LicenseService(
     new SqliteLicenseRepository(db),
     new CryptoLicenseVerifier(),
     new HttpLicenseServer({
       baseUrl: process.env.DOCUMIND_LICENSE_URL ?? DEFAULT_LICENSE_URL,
     }),
-    deviceIdOf(userDataPath),
+    deviceId,
   )
+
+  // Sincronización: el store remoto se reconstruye con la configuración
+  // vigente en cada operación (configure() persiste en el store local).
+  const syncLocal = new SqliteSyncLocalStore(db, deviceId)
+  const syncRemote: SyncRemoteStore = {
+    async push(changes: SyncChange[]): Promise<void> {
+      const settings = await syncLocal.getSettings()
+      if (!settings.url || !settings.anonKey) {
+        throw new SyncError('Sincronización no configurada', 'ERR_SYNC_NOT_CONFIGURED')
+      }
+      const store = new SupabaseSyncStore({
+        url: settings.url,
+        anonKey: settings.anonKey,
+        deviceId,
+      })
+      await store.push(changes)
+    },
+    async pull(sinceMs: number): Promise<SyncChange[]> {
+      const settings = await syncLocal.getSettings()
+      if (!settings.url || !settings.anonKey) {
+        throw new SyncError('Sincronización no configurada', 'ERR_SYNC_NOT_CONFIGURED')
+      }
+      const store = new SupabaseSyncStore({
+        url: settings.url,
+        anonKey: settings.anonKey,
+        deviceId,
+      })
+      return store.pull(sinceMs)
+    },
+    async ping(): Promise<void> {
+      const settings = await syncLocal.getSettings()
+      if (!settings.url || !settings.anonKey) {
+        throw new SyncError('Sincronización no configurada', 'ERR_SYNC_NOT_CONFIGURED')
+      }
+      const store = new SupabaseSyncStore({
+        url: settings.url,
+        anonKey: settings.anonKey,
+        deviceId,
+      })
+      await store.ping()
+    },
+  }
+  const sync = new SyncService(syncLocal, syncRemote)
 
   const ocrEngine =
     options.ocrEngine !== undefined
@@ -363,6 +416,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
     automationService,
     auth,
     license,
+    sync,
     get classificationService(): ClassificationService {
       return classificationService
     },

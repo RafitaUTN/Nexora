@@ -112,6 +112,14 @@ const api: DocuMindApi = {
     deactivate: () => invoke(IpcChannel.LicenseDeactivate),
   },
 
+  sync: {
+    status: () => invoke(IpcChannel.SyncStatus),
+    setEnabled: (enabled) => invoke(IpcChannel.SyncSetEnabled, enabled),
+    configure: (url, anonKey) => invoke(IpcChannel.SyncConfigure, { url, anonKey }),
+    run: () => invoke(IpcChannel.SyncRun),
+    ping: () => invoke(IpcChannel.SyncPing),
+  },
+
   /** Suscripción a eventos del proceso principal (devuelve unsubscribe). */
   on: <T>(channel: IpcEvent, callback: (payload: T) => void) => {
     const listener = (_event: IpcRendererEvent, payload: T): void => callback(payload)

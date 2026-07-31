@@ -17,4 +17,5 @@ export const queryKeys = {
   apiKey: (provider: string) => ['ai', 'apiKey', provider] as const,
   users: ['users'] as const,
   license: ['license'] as const,
+  sync: ['sync'] as const,
 }
