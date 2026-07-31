@@ -1,9 +1,4 @@
-import type {
-  ChatRequest,
-  ChatResponse,
-  ProviderConfig,
-  ProviderHealth,
-} from '@documind/domain'
+import type { ChatRequest, ChatResponse, ProviderConfig, ProviderHealth } from '@documind/domain'
 import type { AIProvider } from '@documind/domain'
 import { jsonRequest } from './http-client'
 
@@ -68,10 +63,10 @@ export class GeminiProvider implements AIProvider {
   async health(): Promise<ProviderHealth> {
     const started = performance.now()
     try {
-      const res = await fetch(
-        `${this.baseUrl.replace(/\/$/, '')}/v1beta/models?pageSize=1`,
-        { headers: { 'x-goog-api-key': this.config.apiKey }, signal: AbortSignal.timeout(8_000) },
-      )
+      const res = await fetch(`${this.baseUrl.replace(/\/$/, '')}/v1beta/models?pageSize=1`, {
+        headers: { 'x-goog-api-key': this.config.apiKey },
+        signal: AbortSignal.timeout(8_000),
+      })
       return {
         ok: res.ok,
         latencyMs: Math.round(performance.now() - started),
@@ -84,5 +79,16 @@ export class GeminiProvider implements AIProvider {
         error: error instanceof Error ? error.message : 'Sin conexión',
       }
     }
+  }
+
+  async listModels(): Promise<string[]> {
+    const data = (await jsonRequest('/v1beta/models?pageSize=100', {
+      baseUrl: this.baseUrl,
+      headers: { 'x-goog-api-key': this.config.apiKey },
+      method: 'GET',
+      timeoutMs: 8_000,
+      maxRetries: 0,
+    })) as { models?: { name?: string }[] }
+    return (data.models ?? []).map((model) => (model.name ?? '').replace(/^models\//, '')).filter(Boolean)
   }
 }

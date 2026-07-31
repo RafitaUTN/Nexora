@@ -44,6 +44,7 @@ export const IpcChannel = {
   AiSetApiKey: 'ai:setApiKey',
   AiDeleteApiKey: 'ai:deleteApiKey',
   AiApiKeyStatus: 'ai:apiKeyStatus',
+  AiResolveModel: 'ai:resolveModel',
 
   // OCR
   OcrHealth: 'ocr:health',

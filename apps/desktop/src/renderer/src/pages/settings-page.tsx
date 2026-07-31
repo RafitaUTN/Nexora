@@ -10,6 +10,7 @@ import {
   Search,
   Share2,
   ShieldCheck,
+  Sparkles,
   Trash2,
   UserPlus,
   UserX,
@@ -59,7 +60,6 @@ interface SettingsForm {
   ocrMaxDpi: string
   telemetry: boolean
   provider: string
-  model: string
   tokenBudget: string
   sendWholeDocument: boolean
   maxCacheAgeDays: string
@@ -78,7 +78,6 @@ function toForm(settings: AppSettings): SettingsForm {
     ocrMaxDpi: String(settings.ocrMaxDpi),
     telemetry: settings.telemetry,
     provider: settings.ai.provider ?? '',
-    model: settings.ai.model,
     tokenBudget: String(settings.ai.tokenBudget),
     sendWholeDocument: settings.ai.sendWholeDocument,
     maxCacheAgeDays: String(settings.ai.maxCacheAgeDays),
@@ -160,6 +159,50 @@ function ProviderApiKeyRow({ provider }: { provider: ProviderId }): JSX.Element 
       >
         <Trash2 />
       </Button>
+    </div>
+  )
+}
+
+function AiModelRow({ provider }: { provider: ProviderId | null }): JSX.Element | null {
+  const queryClient = useQueryClient()
+  const push = useToasts((s) => s.push)
+  const modelQuery = useQuery({
+    queryKey: queryKeys.aiModel(provider ?? ''),
+    queryFn: () => window.api.ai.resolveModel(provider ?? '', false),
+    enabled: !!provider,
+    staleTime: 60_000,
+  })
+  const recommend = useMutation({
+    mutationFn: () => window.api.ai.resolveModel(provider ?? '', true),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.settings })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.aiModel(provider ?? '') })
+      push({ kind: 'success', title: 'Modelo recomendado guardado' })
+    },
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo elegir el modelo', body: error.message }),
+  })
+  if (!provider) return null
+  return (
+    <div className="space-y-1.5 sm:col-span-2">
+      <p className="text-sm font-medium">Modelo</p>
+      <div className="flex items-center gap-2">
+        <div className="flex h-9 flex-1 items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
+          {modelQuery.isLoading ? 'Seleccionando…' : (modelQuery.data?.model ?? 'Por configurar')}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={recommend.isPending || modelQuery.isLoading}
+          onClick={() => recommend.mutate()}
+        >
+          {recommend.isPending ? <Spinner /> : <Sparkles />}
+          Recomendar
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        El mejor modelo disponible para el proveedor se elige automáticamente.
+      </p>
     </div>
   )
 }
@@ -1111,7 +1154,6 @@ export function SettingsPage(): JSX.Element {
         telemetry: form.telemetry,
         ai: {
           provider: (form.provider || null) as ProviderId | null,
-          model: form.model,
           tokenBudget: Number(form.tokenBudget),
           sendWholeDocument: form.sendWholeDocument,
           maxCacheAgeDays: Number(form.maxCacheAgeDays),
@@ -1250,15 +1292,7 @@ export function SettingsPage(): JSX.Element {
               ))}
             </Select>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="settings-model">Modelo</Label>
-            <Input
-              id="settings-model"
-              value={form.model}
-              onChange={(e) => set('model', e.target.value)}
-              placeholder="p. ej. gpt-4o-mini"
-            />
-          </div>
+          <AiModelRow provider={settings.data?.ai.provider ?? null} />
           <div className="space-y-1.5">
             <Label htmlFor="settings-token-budget">Presupuesto de tokens</Label>
             <Input

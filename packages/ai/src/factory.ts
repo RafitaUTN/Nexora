@@ -10,7 +10,11 @@ import { OllamaProvider } from './providers/ollama'
  * Factoría de proveedores de IA (Strategy + Factory). Para agregar un
  * proveedor: implementar AIProvider y registrarlo aquí.
  */
-export function createAIProvider(id: ProviderId, apiKey: string, overrides?: Partial<ProviderConfig>): AIProvider {
+export function createAIProvider(
+  id: ProviderId,
+  apiKey: string,
+  overrides?: Partial<ProviderConfig>,
+): AIProvider {
   const config: ProviderConfig = {
     id,
     apiKey,

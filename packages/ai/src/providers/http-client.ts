@@ -26,12 +26,11 @@ const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 export async function jsonRequest(
   path: string,
   options: JsonHttpOptions & {
-    method?: 'POST'
+    method?: 'POST' | 'GET'
     body?: unknown
   },
 ): Promise<unknown> {
-  const { baseUrl, apiKey, headers, timeoutMs = 30_000, maxRetries = 2, method = 'POST', body } =
-    options
+  const { baseUrl, apiKey, headers, timeoutMs = 30_000, maxRetries = 2, method = 'POST', body } = options
 
   const url = `${baseUrl.replace(/\/$/, '')}${path}`
   const controller = new AbortController()

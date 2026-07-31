@@ -16,6 +16,7 @@ export const queryKeys = {
   ocrLanguages: ['ocr', 'languages'] as const,
   aiHealth: ['ai', 'health'] as const,
   aiUsage: ['ai', 'usage'] as const,
+  aiModel: (provider: string) => ['ai', 'model', provider] as const,
   apiKey: (provider: string) => ['ai', 'apiKey', provider] as const,
   users: ['users'] as const,
   license: ['license'] as const,

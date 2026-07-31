@@ -1,9 +1,4 @@
-import type {
-  ChatRequest,
-  ChatResponse,
-  ProviderConfig,
-  ProviderHealth,
-} from '@documind/domain'
+import type { ChatRequest, ChatResponse, ProviderConfig, ProviderHealth } from '@documind/domain'
 import type { AIProvider } from '@documind/domain'
 import { jsonRequest } from './http-client'
 
@@ -73,5 +68,15 @@ export class OllamaProvider implements AIProvider {
         error: error instanceof Error ? error.message : 'Sin conexión',
       }
     }
+  }
+
+  async listModels(): Promise<string[]> {
+    const data = (await jsonRequest('/api/tags', {
+      baseUrl: this.baseUrl,
+      method: 'GET',
+      timeoutMs: 8_000,
+      maxRetries: 0,
+    })) as { models?: { name?: string }[] }
+    return (data.models ?? []).map((model) => model.name ?? '').filter(Boolean)
   }
 }

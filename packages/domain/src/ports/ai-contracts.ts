@@ -17,9 +17,7 @@ export interface ChatMessage {
 }
 
 export const chatRequestSchema = z.object({
-  messages: z.array(
-    z.object({ role: z.enum(['system', 'user', 'assistant']), content: z.string() }),
-  ),
+  messages: z.array(z.object({ role: z.enum(['system', 'user', 'assistant']), content: z.string() })),
   model: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().int().positive().optional(),
@@ -59,4 +57,9 @@ export const defaultModels: Record<ProviderId, string> = {
   gemini: 'gemini-2.0-flash',
   claude: 'claude-3-5-sonnet',
   ollama: 'llama3.2',
+}
+
+export interface ResolvedModel {
+  provider: ProviderId
+  model: string | null
 }

@@ -1,9 +1,4 @@
-import type {
-  ChatRequest,
-  ChatResponse,
-  ProviderConfig,
-  ProviderHealth,
-} from '@documind/domain'
+import type { ChatRequest, ChatResponse, ProviderConfig, ProviderHealth } from '@documind/domain'
 import type { AIProvider } from '@documind/domain'
 import { jsonRequest } from './http-client'
 
@@ -72,5 +67,16 @@ export class OpenRouterProvider implements AIProvider {
         error: error instanceof Error ? error.message : 'Sin conexión',
       }
     }
+  }
+
+  async listModels(): Promise<string[]> {
+    const data = (await jsonRequest('/models', {
+      baseUrl: this.baseUrl,
+      apiKey: this.config.apiKey,
+      method: 'GET',
+      timeoutMs: 8_000,
+      maxRetries: 0,
+    })) as { data?: { id?: string }[] }
+    return (data.data ?? []).map((model) => model.id ?? '').filter(Boolean)
   }
 }

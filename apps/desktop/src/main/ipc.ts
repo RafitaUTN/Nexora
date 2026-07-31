@@ -1,11 +1,10 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { statSync } from 'node:fs'
 import { basename } from 'node:path'
-import type { EventBus, PublicUser, Role } from '@documind/domain'
+import type { EventBus, PublicUser, Role, SettingsPatch } from '@documind/domain'
 import {
   AuthError,
   SyncError,
-  appSettingsSchema,
   documentFilterSchema,
   loginSchema,
   newAutomationSchema,
@@ -324,6 +323,10 @@ export function registerIpc(context: IpcContext): void {
     const provider = providerIdSchema.parse(payload.provider)
     return { provider, set: await rt().hasApiKey(provider) }
   })
+  handle(IpcChannel.AiResolveModel, async (payload: { provider?: unknown; force?: unknown }) => {
+    const provider = providerIdSchema.parse(String(payload?.provider ?? ''))
+    return rt().resolveModel(provider, Boolean(payload?.force))
+  })
 
   // OCR
   handle(IpcChannel.OcrHealth, async () => {
@@ -356,10 +359,9 @@ export function registerIpc(context: IpcContext): void {
   handle(IpcChannel.SettingsGet, async () => rt().settingsService.get())
   handle(IpcChannel.SettingsSet, async (patch) => {
     requireRole('admin')
-    const settings = appSettingsSchema.parse(patch)
-    const updated = await rt().settingsService.update(settings)
-    await rt().refreshServices()
-    return updated
+    // updateSettings valida el objeto fusionado y reinicia el modelo si cambia
+    // el proveedor; un parche parcial no pisa `ai.model` (resolución automática).
+    return rt().updateSettings(patch as SettingsPatch)
   })
 
   // Backups

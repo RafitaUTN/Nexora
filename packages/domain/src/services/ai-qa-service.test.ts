@@ -24,16 +24,21 @@ function makeFakeProvider(respond: (req: ChatRequest) => string): AIProvider {
     async health(): Promise<ProviderHealth> {
       return { ok: true, latencyMs: 10 }
     },
+    async listModels(): Promise<string[]> {
+      return ['openai/gpt-4o-mini']
+    },
   }
 }
 
 const JSON_RESPONSE = JSON.stringify({ answer: 'Según el documento 1, sí.' })
 
-function makeService(overrides: {
-  provider?: AIProvider | null
-  hits?: { document: ReturnType<typeof makeDocumentSummary>; score: number }[]
-  contents?: Record<number, string>
-} = {}) {
+function makeService(
+  overrides: {
+    provider?: AIProvider | null
+    hits?: { document: ReturnType<typeof makeDocumentSummary>; score: number }[]
+    contents?: Record<number, string>
+  } = {},
+) {
   const documents = new FakeDocumentRepository()
   for (const [id, content] of Object.entries(overrides.contents ?? {})) {
     const doc = documents.docs.find((d) => d.id === Number(id))
@@ -108,6 +113,9 @@ describe('QaService', () => {
       },
       async health(): Promise<ProviderHealth> {
         return { ok: false, latencyMs: 0 }
+      },
+      async listModels(): Promise<string[]> {
+        return []
       },
     }
     const { service, bus } = makeService({

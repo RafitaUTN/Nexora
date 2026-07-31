@@ -61,6 +61,7 @@ const api: DocuMindApi = {
     setApiKey: (provider, apiKey) => invoke(IpcChannel.AiSetApiKey, { provider, apiKey }),
     deleteApiKey: (provider) => invoke(IpcChannel.AiDeleteApiKey, { provider }),
     apiKeyStatus: (provider) => invoke(IpcChannel.AiApiKeyStatus, { provider }),
+    resolveModel: (provider, force) => invoke(IpcChannel.AiResolveModel, { provider, force }),
   },
 
   ocr: {

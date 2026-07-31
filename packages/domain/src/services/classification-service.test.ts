@@ -23,6 +23,9 @@ function makeFakeProvider(respond: (req: ChatRequest) => string): AIProvider {
     async health(): Promise<ProviderHealth> {
       return { ok: true, latencyMs: 10 }
     },
+    async listModels(): Promise<string[]> {
+      return ['openai/gpt-4o-mini']
+    },
   }
 }
 

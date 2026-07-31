@@ -20,7 +20,9 @@ import type {
   PublicUser,
   QaResult,
   RegisterUserInput,
+  ResolvedModel,
   Role,
+  SettingsPatch,
   Share,
   ShareRole,
   SyncResult,
@@ -132,6 +134,7 @@ export interface DocuMindApi {
     setApiKey(provider: string, apiKey: string): Promise<{ provider: string }>
     deleteApiKey(provider: string): Promise<{ provider: string }>
     apiKeyStatus(provider: string): Promise<ApiKeyStatus>
+    resolveModel(provider: string, force?: boolean): Promise<ResolvedModel>
   }
   ocr: {
     health(): Promise<OcrHealthView>
@@ -142,7 +145,7 @@ export interface DocuMindApi {
   }
   settings: {
     get(): Promise<AppSettings>
-    set(patch: Partial<AppSettings>): Promise<AppSettings>
+    set(patch: SettingsPatch): Promise<AppSettings>
   }
   backups: {
     create(): Promise<BackupEntry>

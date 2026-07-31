@@ -22,6 +22,15 @@ describe('SettingsService', () => {
     expect(reloaded.ai.provider).toBe('ollama')
   })
 
+  it('fusiona parches anidados sin pisar el resto de ai/updates', async () => {
+    const service = new SettingsService(new FakeSettingsRepository())
+    await service.update({ ai: { provider: 'ollama', model: 'llama3.2' } })
+    const updated = await service.update({ ai: { model: 'gemma2' } })
+    expect(updated.ai.provider).toBe('ollama')
+    expect(updated.ai.model).toBe('gemma2')
+    expect(updated.ai.tokenBudget).toBe(8_000)
+  })
+
   it('rechaza valores fuera de rango (tokenBudget inválido)', async () => {
     const service = new SettingsService(new FakeSettingsRepository())
     await expect(service.update({ ai: { tokenBudget: 50 } })).rejects.toThrow()

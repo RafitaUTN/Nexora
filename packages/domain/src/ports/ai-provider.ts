@@ -9,6 +9,8 @@ export interface AIProvider {
   readonly id: ProviderId
   chat(req: ChatRequest): Promise<ChatResponse>
   health(): Promise<ProviderHealth>
+  /** Lista de modelos disponibles para el usuario (p. ej. GET /models). */
+  listModels(): Promise<string[]>
 }
 
 export type { ChatRequest, ChatResponse, ProviderHealth }

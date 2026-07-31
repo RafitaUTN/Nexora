@@ -22,7 +22,12 @@ export class SettingsService {
 
   async update(patch: SettingsPatch): Promise<AppSettings> {
     const current = await this.get()
-    const merged = appSettingsSchema.parse({ ...current, ...patch })
+    const merged = appSettingsSchema.parse({
+      ...current,
+      ...patch,
+      ai: { ...current.ai, ...patch.ai },
+      updates: { ...current.updates, ...patch.updates },
+    })
     await this.repo.set(SETTINGS_KEY, JSON.stringify(merged))
     return merged
   }

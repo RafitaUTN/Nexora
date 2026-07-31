@@ -9,6 +9,9 @@ import type {
   EventBus,
   FileWatcher,
   OCREngine,
+  ProviderId,
+  ResolvedModel,
+  SettingsPatch,
 } from '@documind/domain'
 import {
   AuditService,
@@ -25,13 +28,14 @@ import {
   SyncService,
   TagService,
   SyncError,
+  defaultModels,
   type Share,
   type ShareRole,
   type SyncChange,
   type SyncRemoteStore,
   type SyncStatus,
 } from '@documind/domain'
-import { createAIProvider } from '@documind/ai'
+import { createAIProvider, selectBestModel } from '@documind/ai'
 import { ExtractionService } from '@documind/document'
 import { OcrLanguageManager, TesseractOcrEngine } from '@documind/ocr'
 import {
@@ -143,9 +147,13 @@ export interface AppRuntime {
   updates: UpdateManager
   sources: DocumentSource[]
   getProvider(): Promise<AIProvider | null>
+  /** Resuelve (y si hace falta consulta) el modelo activo del proveedor. */
+  resolveModel(providerId: ProviderId, force?: boolean): Promise<ResolvedModel>
   saveApiKey(provider: string, apiKey: string): Promise<void>
   deleteApiKey(provider: string): Promise<void>
   hasApiKey(provider: string): Promise<boolean>
+  /** Aplica un parche de ajustes; si cambia el proveedor, reinicia el modelo. */
+  updateSettings(patch: SettingsPatch): Promise<AppSettings>
   refreshServices(): Promise<void>
   scanSource(sourceId: number): Promise<ScanResult>
   scanPath(path: string, filename: string, sourceId: number | null): Promise<boolean>
@@ -390,12 +398,57 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
           maxWorkers: 2,
         })
 
+  /** Modelos ya resueltos por proveedor (evita reconsultar /models en cada uso). */
+  const modelCache = new Map<ProviderId, string>()
+
+  /**
+   * Devuelve el modelo activo del proveedor. Si el usuario no eligió uno
+   * (settings.ai.model vacío), consulta /models una vez, elige el mejor y lo
+   * persiste para que los servicios de IA usen el mismo modelo (y clave de caché).
+   */
+  const pickModel = async (provider: AIProvider): Promise<string | null> => {
+    const cached = modelCache.get(provider.id)
+    if (cached !== undefined) return cached || null
+
+    const settings = await settingsService.get()
+    const existing = settings.ai.model.trim()
+    if (existing) {
+      modelCache.set(provider.id, existing)
+      return existing
+    }
+
+    try {
+      const models = await provider.listModels()
+      const picked = selectBestModel(provider.id, models) ?? defaultModels[provider.id] ?? null
+      if (picked) {
+        await settingsService.update({ ai: { model: picked } })
+        settingsCache = await settingsService.get()
+      }
+      modelCache.set(provider.id, picked ?? '')
+      return picked
+    } catch {
+      const fallback = defaultModels[provider.id] ?? null
+      modelCache.set(provider.id, fallback ?? '')
+      return fallback
+    }
+  }
+
   const getProvider = async (): Promise<AIProvider | null> => {
     const settings = await settingsService.get()
     if (!settings.ai.provider) return null
     const apiKey = await secretStore.get(settings.ai.provider)
     if (!apiKey && settings.ai.provider !== 'ollama') return null
-    return createAIProvider(settings.ai.provider, apiKey ?? '')
+    const provider = createAIProvider(settings.ai.provider, apiKey ?? '')
+    await pickModel(provider)
+    return provider
+  }
+
+  const resolveModel = async (providerId: ProviderId, force = false): Promise<ResolvedModel> => {
+    if (force) modelCache.delete(providerId)
+    const provider = await getProvider()
+    if (!provider || provider.id !== providerId) return { provider: providerId, model: null }
+    const model = await pickModel(provider)
+    return { provider: providerId, model: model || null }
   }
 
   let classificationService!: ClassificationService
@@ -573,6 +626,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
     updates,
     sources: await repositories.sources.list(),
     getProvider,
+    resolveModel,
     async saveApiKey(provider, apiKey): Promise<void> {
       await secretStore.set(provider as never, apiKey)
       await buildIndexing()
@@ -583,6 +637,17 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
     },
     async hasApiKey(provider): Promise<boolean> {
       return secretStore.has(provider as never)
+    },
+    async updateSettings(patch): Promise<AppSettings> {
+      const current = await settingsService.get()
+      const changedProvider = patch.ai?.provider !== undefined && patch.ai.provider !== current.ai.provider
+      if (changedProvider) {
+        modelCache.clear()
+        patch = { ...patch, ai: { ...patch.ai, model: '' } }
+      }
+      const updated = await settingsService.update(patch)
+      await runtime.refreshServices()
+      return updated
     },
     async refreshServices(): Promise<void> {
       settingsCache = await settingsService.get()

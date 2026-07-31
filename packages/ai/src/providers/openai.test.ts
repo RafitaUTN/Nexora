@@ -9,7 +9,9 @@ afterEach(() => {
   for (const server of servers.splice(0)) server.close()
 })
 
-async function mockServer(handler: (req: IncomingMessage, body: string) => { status: number; json: unknown }): Promise<string> {
+async function mockServer(
+  handler: (req: IncomingMessage, body: string) => { status: number; json: unknown },
+): Promise<string> {
   const server = createServer((req, res) => {
     let body = ''
     req.on('data', (chunk) => (body += chunk))
@@ -40,7 +42,12 @@ describe('OpenAiProvider contra mock server', () => {
         },
       }
     })
-    const provider = new OpenAiProvider({ id: 'openai', apiKey: 'sk-test', baseUrl, defaultModel: 'gpt-4o-mini' })
+    const provider = new OpenAiProvider({
+      id: 'openai',
+      apiKey: 'sk-test',
+      baseUrl,
+      defaultModel: 'gpt-4o-mini',
+    })
     const response = await provider.chat({ messages: [{ role: 'user', content: 'clasifica' }] })
     expect(seenAuth).toBe('Bearer sk-test')
     expect(response.content).toBe('{"category":"factura"}')
@@ -53,7 +60,12 @@ describe('OpenAiProvider contra mock server', () => {
       status: 401,
       json: { error: { message: 'invalid api key' } },
     }))
-    const provider = new OpenAiProvider({ id: 'openai', apiKey: 'mala', baseUrl, defaultModel: 'gpt-4o-mini' })
+    const provider = new OpenAiProvider({
+      id: 'openai',
+      apiKey: 'mala',
+      baseUrl,
+      defaultModel: 'gpt-4o-mini',
+    })
     await expect(provider.chat({ messages: [{ role: 'user', content: 'x' }] })).rejects.toThrow('HTTP 401')
   })
 
@@ -79,5 +91,20 @@ describe('OpenAiProvider contra mock server', () => {
     const provider = new OpenAiProvider({ id: 'openai', apiKey: 'sk', baseUrl, defaultModel: 'gpt-4o-mini' })
     const health = await provider.health()
     expect(health.ok).toBe(true)
+  })
+
+  it('listModels extrae los ids de /models', async () => {
+    const baseUrl = await mockServer((req) =>
+      req.url?.startsWith('/models')
+        ? {
+            status: 200,
+            json: {
+              data: [{ id: 'gpt-4o' }, { id: 'gpt-4o-mini' }, { id: 'text-embedding-3-small' }],
+            },
+          }
+        : { status: 404, json: {} },
+    )
+    const provider = new OpenAiProvider({ id: 'openai', apiKey: 'sk', baseUrl, defaultModel: 'gpt-4o-mini' })
+    await expect(provider.listModels()).resolves.toEqual(['gpt-4o', 'gpt-4o-mini', 'text-embedding-3-small'])
   })
 })

@@ -82,6 +82,16 @@ describe('OllamaProvider', () => {
     expect(health.ok).toBe(false)
     expect(health.error).toBe('Sin conexión')
   })
+
+  it('listModels extrae los nombres de /api/tags', async () => {
+    const baseUrl = await mockServer((req) =>
+      req.url?.startsWith('/api/tags')
+        ? { status: 200, json: { models: [{ name: 'llama3.2' }, { name: 'gemma2' }] } }
+        : { status: 404, json: {} },
+    )
+    const provider = new OllamaProvider({ id: 'ollama', apiKey: '', baseUrl, defaultModel: 'llama3.2' })
+    await expect(provider.listModels()).resolves.toEqual(['llama3.2', 'gemma2'])
+  })
 })
 
 describe('ClaudeProvider', () => {
@@ -105,6 +115,16 @@ describe('ClaudeProvider', () => {
     expect(response.usage.totalTokens).toBe(8)
     expect(headers).toContain('ant-key')
     expect(headers).toContain('2023-06-01')
+  })
+
+  it('listModels extrae los ids de /models', async () => {
+    const baseUrl = await mockServer((req) =>
+      req.url?.startsWith('/models')
+        ? { status: 200, json: { data: [{ id: 'claude-3-5-sonnet' }, { id: 'claude-3-haiku' }] } }
+        : { status: 404, json: {} },
+    )
+    const provider = new ClaudeProvider({ id: 'claude', apiKey: 'k', baseUrl, defaultModel: 'm' })
+    await expect(provider.listModels()).resolves.toEqual(['claude-3-5-sonnet', 'claude-3-haiku'])
   })
 })
 
@@ -131,6 +151,19 @@ describe('GeminiProvider', () => {
     expect(response.content).toContain('contrato')
     expect(response.usage.totalTokens).toBe(14)
     expect(header).toBe('g-key')
+  })
+
+  it('listModels extrae los nombres quitando el prefijo models/', async () => {
+    const baseUrl = await mockServer((req) =>
+      req.url?.startsWith('/v1beta/models')
+        ? {
+            status: 200,
+            json: { models: [{ name: 'models/gemini-2.0-flash' }, { name: 'gemini-1.5-flash' }] },
+          }
+        : { status: 404, json: {} },
+    )
+    const provider = new GeminiProvider({ id: 'gemini', apiKey: 'k', baseUrl, defaultModel: 'm' })
+    await expect(provider.listModels()).resolves.toEqual(['gemini-2.0-flash', 'gemini-1.5-flash'])
   })
 })
 
@@ -195,6 +228,19 @@ describe('OpenRouterProvider', () => {
     const health = await provider.health()
     expect(health.ok).toBe(false)
     expect(health.error).toContain('500')
+  })
+
+  it('listModels extrae los ids de /models', async () => {
+    const baseUrl = await mockServer((req) =>
+      req.url?.startsWith('/models')
+        ? {
+            status: 200,
+            json: { data: [{ id: 'openai/gpt-4o' }, { id: 'anthropic/claude-3.5-sonnet' }] },
+          }
+        : { status: 404, json: {} },
+    )
+    const provider = new OpenRouterProvider({ id: 'openrouter', apiKey: 'k', baseUrl, defaultModel: 'm' })
+    await expect(provider.listModels()).resolves.toEqual(['openai/gpt-4o', 'anthropic/claude-3.5-sonnet'])
   })
 
   it('health es ok contra /models', async () => {
