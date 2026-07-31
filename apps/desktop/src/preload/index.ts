@@ -87,6 +87,19 @@ const api: DocuMindApi = {
     list: (limit, cursor) => invoke(IpcChannel.AuditList, { limit, cursor }),
   },
 
+  auth: {
+    status: () => invoke(IpcChannel.AuthStatus),
+    setup: (input) => invoke(IpcChannel.AuthSetup, input),
+    register: (input) => invoke(IpcChannel.AuthRegister, input),
+    login: (username, password) => invoke(IpcChannel.AuthLogin, { username, password }),
+    logout: () => invoke(IpcChannel.AuthLogout),
+    listUsers: () => invoke(IpcChannel.AuthListUsers),
+    setRole: (userId, role) => invoke(IpcChannel.AuthSetRole, { userId, role }),
+    changePassword: (currentPassword, newPassword) =>
+      invoke(IpcChannel.AuthChangePassword, { currentPassword, newPassword }),
+    deleteUser: (userId) => invoke(IpcChannel.AuthDeleteUser, userId),
+  },
+
   updates: {
     check: () => invoke(IpcChannel.UpdatesCheck),
     install: () => invoke(IpcChannel.UpdatesInstall),

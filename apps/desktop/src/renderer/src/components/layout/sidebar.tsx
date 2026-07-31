@@ -10,9 +10,11 @@ import {
   Settings,
   Sparkles,
   Tag,
+  Users,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { queryKeys } from '@/lib/query-keys'
+import { useAuth } from '@/store/auth'
 
 const navigation = [
   { to: '/', label: 'Inicio', icon: LayoutDashboard, end: true },
@@ -30,6 +32,12 @@ export function Sidebar(): JSX.Element {
     queryKey: queryKeys.system,
     queryFn: () => window.api.system.info(),
   })
+  const currentUser = useAuth((s) => s.currentUser)
+
+  const items =
+    currentUser?.role === 'admin'
+      ? [...navigation.slice(0, 5), { to: '/users', label: 'Usuarios', icon: Users, end: false }, ...navigation.slice(5)]
+      : navigation
 
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r bg-card">
@@ -44,7 +52,7 @@ export function Sidebar(): JSX.Element {
       </div>
 
       <nav className="flex-1 space-y-1 p-3">
-        {navigation.map((item) => (
+        {items.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

@@ -64,6 +64,17 @@ export const IpcChannel = {
   // Audit
   AuditList: 'audit:list',
 
+  // Auth (usuarios y sesión)
+  AuthStatus: 'auth:status',
+  AuthSetup: 'auth:setup',
+  AuthRegister: 'auth:register',
+  AuthLogin: 'auth:login',
+  AuthLogout: 'auth:logout',
+  AuthListUsers: 'auth:listUsers',
+  AuthSetRole: 'auth:setRole',
+  AuthChangePassword: 'auth:changePassword',
+  AuthDeleteUser: 'auth:deleteUser',
+
   // Updates
   UpdatesCheck: 'updates:check',
   UpdatesInstall: 'updates:install',

@@ -1,14 +1,18 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { statSync } from 'node:fs'
 import { basename } from 'node:path'
-import type { EventBus } from '@documind/domain'
+import type { EventBus, PublicUser, Role } from '@documind/domain'
 import {
+  AuthError,
   appSettingsSchema,
   documentFilterSchema,
+  loginSchema,
   newAutomationSchema,
   newSourceSchema,
   newTagSchema,
   providerIdSchema,
+  registerUserSchema,
+  roleSchema,
 } from '@documind/domain'
 import { IpcChannel, IpcEvent, APP_NAME, APP_VERSION } from '@documind/shared'
 import type { AppRuntime } from './runtime'
@@ -52,6 +56,19 @@ export function registerIpc(context: IpcContext): void {
 
   const rt = (): AppRuntime => context.getRuntime()
 
+  // Jerarquía de roles: viewer solo lectura, editor opera documentos,
+  // admin gestiona configuración y usuarios. La comprobación vive aquí y en
+  // el dominio; ocultar botones en la UI no es suficiente.
+  const ROLE_WEIGHT: Record<Role, number> = { viewer: 1, editor: 2, admin: 3 }
+  const requireRole = (min: Role): PublicUser => {
+    const user = rt().auth.current()
+    if (!user) throw new AuthError('Sesión no iniciada', 'ERR_AUTH')
+    if (ROLE_WEIGHT[user.role] < ROLE_WEIGHT[min]) {
+      throw new AuthError('Permisos insuficientes para esta operación', 'ERR_FORBIDDEN')
+    }
+    return user
+  }
+
   // System
   handle(IpcChannel.SystemInfo, async () => ({
     name: APP_NAME,
@@ -63,6 +80,7 @@ export function registerIpc(context: IpcContext): void {
 
   // Importar archivos/carpetas soltadas (drag & drop)
   handle(IpcChannel.SystemImportPaths, async (paths: string[]) => {
+    requireRole('editor')
     const unique = [...new Set(paths.filter((p) => p && p.trim().length > 0))]
     if (unique.length === 0) return { scanned: 0, indexed: 0, errors: [] }
 
@@ -150,6 +168,7 @@ export function registerIpc(context: IpcContext): void {
     return { document, content, tags, classification }
   })
   handle(IpcChannel.DocumentsDelete, async (id: number) => {
+    requireRole('editor')
     await rt().documentService.remove(id)
     await rt().auditService.record({
       action: 'document.deleted',
@@ -166,16 +185,21 @@ export function registerIpc(context: IpcContext): void {
   // Sources
   handle(IpcChannel.SourcesList, async () => rt().repos.sources.list())
   handle(IpcChannel.SourcesAdd, async (input) => {
+    requireRole('editor')
     const source = await rt().repos.sources.add(newSourceSchema.parse(input))
     await rt().refreshServices()
     return source
   })
   handle(IpcChannel.SourcesRemove, async (id: number) => {
+    requireRole('editor')
     await rt().repos.sources.remove(id)
     await rt().refreshServices()
     return { id }
   })
-  handle(IpcChannel.SourcesRescan, async (id: number) => rt().scanSource(id))
+  handle(IpcChannel.SourcesRescan, async (id: number) => {
+    requireRole('editor')
+    return rt().scanSource(id)
+  })
 
   // Search
   handle(IpcChannel.SearchQuery, async (payload) => {
@@ -190,6 +214,7 @@ export function registerIpc(context: IpcContext): void {
   // Tags
   handle(IpcChannel.TagsList, async () => rt().tagService.listWithStats())
   handle(IpcChannel.TagsCreate, async (input) => {
+    requireRole('editor')
     const tag = await rt().tagService.create(newTagSchema.parse(input))
     await rt().auditService.record({
       action: 'tag.create',
@@ -200,6 +225,7 @@ export function registerIpc(context: IpcContext): void {
     return tag
   })
   handle(IpcChannel.TagsAssign, async (payload: { tagId: number; documentId: number }) => {
+    requireRole('editor')
     await rt().tagService.assign(payload.tagId, payload.documentId)
     await rt().auditService.record({
       action: 'tag.assign',
@@ -210,6 +236,7 @@ export function registerIpc(context: IpcContext): void {
     return { ok: true }
   })
   handle(IpcChannel.TagsRemove, async (payload: { tagId: number; documentId: number }) => {
+    requireRole('editor')
     await rt().tagService.unassign(payload.tagId, payload.documentId)
     await rt().auditService.record({
       action: 'tag.unassign',
@@ -220,6 +247,7 @@ export function registerIpc(context: IpcContext): void {
     return { ok: true }
   })
   handle(IpcChannel.TagsDelete, async (id: number) => {
+    requireRole('editor')
     await rt().tagService.delete(id)
     await rt().auditService.record({
       action: 'tag.delete',
@@ -231,6 +259,7 @@ export function registerIpc(context: IpcContext): void {
 
   // AI
   handle(IpcChannel.AiClassify, async (documentId: number) => {
+    requireRole('editor')
     const classification = await rt().classificationService.classify(documentId)
     if (classification) {
       await rt().auditService.record({
@@ -249,6 +278,7 @@ export function registerIpc(context: IpcContext): void {
     return provider.health()
   })
   handle(IpcChannel.AiSetApiKey, async (payload: { provider: string; apiKey: string }) => {
+    requireRole('admin')
     const provider = providerIdSchema.parse(payload.provider)
     if (payload.apiKey.trim().length < 8) {
       throw new Error('La clave API es demasiado corta')
@@ -257,6 +287,7 @@ export function registerIpc(context: IpcContext): void {
     return { provider }
   })
   handle(IpcChannel.AiDeleteApiKey, async (payload: { provider: string }) => {
+    requireRole('admin')
     const provider = providerIdSchema.parse(payload.provider)
     await rt().deleteApiKey(provider)
     return { provider }
@@ -276,6 +307,7 @@ export function registerIpc(context: IpcContext): void {
   // Settings
   handle(IpcChannel.SettingsGet, async () => rt().settingsService.get())
   handle(IpcChannel.SettingsSet, async (patch) => {
+    requireRole('admin')
     const settings = appSettingsSchema.parse(patch)
     const updated = await rt().settingsService.update(settings)
     await rt().refreshServices()
@@ -284,6 +316,7 @@ export function registerIpc(context: IpcContext): void {
 
   // Backups
   handle(IpcChannel.BackupsCreate, async () => {
+    requireRole('admin')
     rt().db.checkpoint()
     const backup = await rt().backups.create(dbPathOf(rt().userDataPath))
     await rt().auditService.record({
@@ -295,6 +328,7 @@ export function registerIpc(context: IpcContext): void {
   })
   handle(IpcChannel.BackupsList, async () => rt().backups.list())
   handle(IpcChannel.BackupsRestore, async (name: string) => {
+    requireRole('admin')
     await rt().restoreBackup(name)
     await rt().auditService.record({
       action: 'backup.restore',
@@ -316,6 +350,7 @@ export function registerIpc(context: IpcContext): void {
   // Automations
   handle(IpcChannel.AutomationsList, async () => rt().automationService.list())
   handle(IpcChannel.AutomationsCreate, async (input) => {
+    requireRole('editor')
     const automation = await rt().automationService.create(newAutomationSchema.parse(input))
     await rt().auditService.record({
       action: 'automation.create',
@@ -326,6 +361,7 @@ export function registerIpc(context: IpcContext): void {
     return automation
   })
   handle(IpcChannel.AutomationsSetEnabled, async (payload: { id: number; enabled: boolean }) => {
+    requireRole('editor')
     await rt().automationService.setEnabled(payload.id, payload.enabled)
     await rt().auditService.record({
       action: payload.enabled ? 'automation.enable' : 'automation.disable',
@@ -335,6 +371,7 @@ export function registerIpc(context: IpcContext): void {
     return { id: payload.id, enabled: payload.enabled }
   })
   handle(IpcChannel.AutomationsRemove, async (id: number) => {
+    requireRole('editor')
     await rt().automationService.remove(id)
     await rt().auditService.record({
       action: 'automation.remove',
@@ -348,6 +385,71 @@ export function registerIpc(context: IpcContext): void {
   handle(IpcChannel.AuditList, async (payload: { limit?: number; cursor?: number } = {}) =>
     rt().auditService.list(payload.limit ?? 100, payload.cursor),
   )
+
+  // Auth (usuarios y sesión). El token nunca cruza el IPC: el renderer solo
+  // recibe usuarios públicos y el proceso principal conserva la sesión.
+  handle(IpcChannel.AuthStatus, async () => rt().auth.status())
+  handle(IpcChannel.AuthSetup, async (input) => {
+    const user = await rt().auth.setupAdmin(registerUserSchema.parse(input))
+    await rt().auditService.record({
+      action: 'auth.setup',
+      entityType: 'user',
+      entityId: String(user.id),
+      detail: user.username,
+    })
+    return user
+  })
+  handle(IpcChannel.AuthRegister, async (input) => {
+    const user = await rt().auth.register(registerUserSchema.parse(input))
+    await rt().auditService.record({
+      action: 'auth.create',
+      entityType: 'user',
+      entityId: String(user.id),
+      detail: user.username,
+    })
+    return user
+  })
+  handle(IpcChannel.AuthLogin, async (payload) => {
+    const { username, password } = loginSchema.parse(payload)
+    const user = await rt().auth.login(username, password)
+    await rt().auditService.record({
+      action: 'auth.login',
+      entityType: 'user',
+      entityId: String(user.id),
+      detail: user.username,
+    })
+    return user
+  })
+  handle(IpcChannel.AuthLogout, async () => {
+    await rt().auth.logout()
+    await rt().auditService.record({ action: 'auth.logout' })
+    return { ok: true }
+  })
+  handle(IpcChannel.AuthListUsers, async () => rt().auth.listUsers())
+  handle(IpcChannel.AuthSetRole, async (payload: { userId: number; role: unknown }) => {
+    const role = roleSchema.parse(payload.role)
+    const updated = await rt().auth.setRole(payload.userId, role)
+    await rt().auditService.record({
+      action: 'auth.setRole',
+      entityType: 'user',
+      entityId: String(updated.id),
+      detail: `${updated.username} → ${updated.role}`,
+    })
+    return updated
+  })
+  handle(IpcChannel.AuthChangePassword, async (payload: { currentPassword: string; newPassword: string }) => {
+    await rt().auth.changePassword(payload.currentPassword, payload.newPassword)
+    return { ok: true }
+  })
+  handle(IpcChannel.AuthDeleteUser, async (userId: number) => {
+    await rt().auth.deleteUser(userId)
+    await rt().auditService.record({
+      action: 'auth.delete',
+      entityType: 'user',
+      entityId: String(userId),
+    })
+    return { ok: true }
+  })
 }
 
 /** Reenvía los eventos del dominio al renderer por los canales IpcEvent. */

@@ -15,4 +15,5 @@ export const queryKeys = {
   aiHealth: ['ai', 'health'] as const,
   aiUsage: ['ai', 'usage'] as const,
   apiKey: (provider: string) => ['ai', 'apiKey', provider] as const,
+  users: ['users'] as const,
 }

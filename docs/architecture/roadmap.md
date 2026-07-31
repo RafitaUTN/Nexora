@@ -75,5 +75,20 @@
 - FASE 9.3 Revisión de deuda técnica. ✅ (decisión)
   - `format:check` falla de forma preexistente en 86 archivos (59 ts, 21 md, 2 json, 1 mjs, 1 yml — ADRs, docs, configs y componentes). Decisión: no formatear el repo entero (diff mecánico grande); lint-staged formatea solo lo modificado en cada commit. Deuda documentada, no bloqueante.
 
+### FASE 10 — Usuarios multi-rol y autenticación
+- FASE 10.1 Dominio y core de autenticación. ✅ (commit `61579a7`)
+  - ADR-0011: hash scrypt (`node:crypto`) en formato PHC propio `$scrypt$N=…,r=…,p=…$salt$hash`; roles `admin`/`editor`/`viewer`; sesiones por token opaco de 256 bits con SHA-256 en DB y TTL 30 días. Argon2 descartado (`@node-rs/argon2` no verifica en Node 24/win32).
+  - Migración 005 (`users_sessions`): tablas `users` (username UNIQUE NOCASE, role CHECK) y `sessions` (token_hash UNIQUE, FK CASCADE).
+  - Dominio: `entities/user` (schemas Zod), puertos `PasswordHasher`, `SessionTokenService`, `UserRepository`, `SessionRepository`; `AuthService` con `AuthError` (códigos) y validación de permisos por rol; `toPublicUser` nunca expone el hash.
+  - Core: `ScryptPasswordHasher` (timingSafeEqual), `CryptoSessionTokens`, `SqliteUserRepository`, `SqliteSessionRepository`.
+  - Tests: `auth-service` (setup/lock, login, expiración, roles, cambio de contraseña), scrypt y repos SQLite. Cobertura 92.02/81.6/91.48/93.7.
+- FASE 10.2 IPC y sesión persistente en el proceso principal. ✅
+  - Canales auth en `IpcChannel` (`auth:status|setup|register|login|logout|listUsers|setRole|changePassword|deleteUser`).
+  - `SessionManager` en main: el token crudo nunca cruza IPC (solo usuarios públicos); se persiste cifrado en `SecretStore` (kind `session`) y se restaura al arranque.
+  - `runtime.ts` monta `AuthService` + repos users/sessions; guards de rol en IPC: viewer solo lectura, editor opera documentos, admin configuración/usuarios/backups.
+- FASE 10.3 UI de autenticación y gestión de usuarios. ✅
+  - `AuthGate` (setup → login → app), `LoginPage`, `SetupPage`; store zustand `useAuth`.
+  - `UsersPage` admin-only (crear, rol, eliminar, cambiar contraseña) + enlace en sidebar solo admin; topbar muestra usuario/rol y logout.
+
 ## Post-MVP
-- Usuarios multi-rol (Argon2, sesiones), activación de licencias online, sincronización Supabase/Postgres, colaboración, plugin de búsqueda de escritorio (Raycast-style).
+- Activación de licencias online, sincronización Supabase/Postgres, colaboración, plugin de búsqueda de escritorio (Raycast-style).

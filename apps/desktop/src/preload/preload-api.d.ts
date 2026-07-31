@@ -12,6 +12,9 @@ import type {
   NewSource,
   NewTag,
   PagedResult,
+  PublicUser,
+  RegisterUserInput,
+  Role,
   Tag,
 } from '@documind/domain'
 import type { IpcEvent } from '@documind/shared'
@@ -138,6 +141,17 @@ export interface DocuMindApi {
   }
   audit: {
     list(limit?: number, cursor?: number): Promise<AuditEntry[]>
+  }
+  auth: {
+    status(): Promise<{ hasUsers: boolean; currentUser: PublicUser | null }>
+    setup(input: RegisterUserInput): Promise<PublicUser>
+    register(input: RegisterUserInput): Promise<PublicUser>
+    login(username: string, password: string): Promise<PublicUser>
+    logout(): Promise<{ ok: boolean }>
+    listUsers(): Promise<PublicUser[]>
+    setRole(userId: number, role: Role): Promise<PublicUser>
+    changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean }>
+    deleteUser(userId: number): Promise<{ ok: boolean }>
   }
   updates: {
     check(): Promise<UpdateStatus>

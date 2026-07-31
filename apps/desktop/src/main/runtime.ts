@@ -12,6 +12,7 @@ import type {
 } from '@documind/domain'
 import {
   AuditService,
+  AuthService,
   AutomationService,
   ClassificationService,
   DocumentService,
@@ -25,8 +26,10 @@ import { TesseractOcrEngine } from '@documind/ocr'
 import {
   AesGcm,
   ConsoleLogger,
+  CryptoSessionTokens,
   InMemoryEventBus,
   IndexingService,
+  ScryptPasswordHasher,
   SqliteAiCacheRepository,
   SqliteAiUsageRepository,
   SqliteAuditRepository,
@@ -37,9 +40,11 @@ import {
   SqliteOcrQueueRepository,
   SqliteSearchRepository,
   SqliteSecretStore,
+  SqliteSessionRepository,
   SqliteSettingsRepository,
   SqliteSourceRepository,
   SqliteTagRepository,
+  SqliteUserRepository,
   randomHex,
   runMigrations,
   type Logger,
@@ -48,6 +53,7 @@ import { isAllowedExtension } from '@documind/shared'
 import { ChokidarFileWatcher } from './watcher'
 import { BackupManager } from './backups'
 import { UpdateManager } from './updates'
+import { SessionManager } from './session'
 
 export interface RuntimeOptions {
   userDataPath: string
@@ -76,6 +82,8 @@ export interface RuntimeRepositories {
   aiUsage: SqliteAiUsageRepository
   ocrQueue: SqliteOcrQueueRepository
   automation: SqliteAutomationRepository
+  users: SqliteUserRepository
+  sessions: SqliteSessionRepository
 }
 
 export interface AppRuntime {
@@ -91,6 +99,7 @@ export interface AppRuntime {
   auditService: AuditService
   automationService: AutomationService
   classificationService: ClassificationService
+  auth: SessionManager
   indexing: IndexingService
   ocrEngine: OCREngine | null
   watcher: FileWatcher
@@ -157,6 +166,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
     aiUsage: new SqliteAiUsageRepository(db),
     ocrQueue: new SqliteOcrQueueRepository(db),
     automation: new SqliteAutomationRepository(db),
+    users: new SqliteUserRepository(db),
+    sessions: new SqliteSessionRepository(db),
   }
   const secretStore = new SqliteSecretStore(db, cipher)
 
@@ -166,6 +177,14 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
   const tagService = new TagService(repositories.tags, bus)
   const auditService = new AuditService(repositories.audit)
   const automationService = new AutomationService(repositories.automation, bus)
+
+  const authService = new AuthService(
+    repositories.users,
+    repositories.sessions,
+    new ScryptPasswordHasher(),
+    new CryptoSessionTokens(),
+  )
+  const auth = new SessionManager(authService, secretStore)
 
   const ocrEngine =
     options.ocrEngine !== undefined
@@ -311,6 +330,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
     tagService,
     auditService,
     automationService,
+    auth,
     get classificationService(): ClassificationService {
       return classificationService
     },
@@ -409,5 +429,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
   }
 
   await runtime.refreshServices()
+  await auth.restore()
   return runtime
 }

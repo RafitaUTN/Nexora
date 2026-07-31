@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Moon, Search, Sun, Monitor } from 'lucide-react'
+import { LogOut, Moon, Search, Sun, Monitor } from 'lucide-react'
 import { useTheme } from '@/store/theme'
+import { useAuth } from '@/store/auth'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 
 const themeIcons = {
   system: Monitor,
@@ -10,11 +12,19 @@ const themeIcons = {
   dark: Moon,
 } as const
 
+const ROLE_LABELS = {
+  admin: 'Admin',
+  editor: 'Editor',
+  viewer: 'Lector',
+} as const
+
 export function Topbar(): JSX.Element {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const theme = useTheme((s) => s.theme)
   const setTheme = useTheme((s) => s.setTheme)
+  const currentUser = useAuth((s) => s.currentUser)
+  const logout = useAuth((s) => s.logout)
 
   const onSearch = (event: FormEvent): void => {
     event.preventDefault()
@@ -40,6 +50,16 @@ export function Topbar(): JSX.Element {
         />
       </form>
       <div className="ml-auto flex items-center gap-2">
+        {currentUser ? (
+          <>
+            <Badge tone={currentUser.role === 'admin' ? 'info' : 'neutral'}>
+              {ROLE_LABELS[currentUser.role]}
+            </Badge>
+            <span className="hidden text-sm text-muted-foreground sm:inline">
+              {currentUser.displayName}
+            </span>
+          </>
+        ) : null}
         <button
           type="button"
           onClick={cycleTheme}
@@ -47,6 +67,14 @@ export function Topbar(): JSX.Element {
           title={`Tema: ${theme}`}
         >
           <ThemeIcon className="size-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void logout()}
+          className="flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+          title="Cerrar sesión"
+        >
+          <LogOut className="size-4" />
         </button>
       </div>
     </header>

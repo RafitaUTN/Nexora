@@ -6,6 +6,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); vers
 ## [No publicado]
 
 ### Añadido
+- FASE 10: usuarios multi-rol y autenticación. `AuthService` (dominio) con scrypt (PHC `$scrypt$N=…,r=…,p=…$salt$hash`), tokens de sesión opacos de 256 bits (solo SHA-256 en DB, TTL 30 días), roles `admin`/`editor`/`viewer`, sesión persistente cifrada en `SecretStore` (kind `session`). Migración 005 `users_sessions`. IPC: 9 canales auth con guards de rol por canal (`auth:status|setup|register|login|logout|listUsers|setRole|changePassword|deleteUser`). UI: `AuthGate` (setup → login → app), `LoginPage`, `SetupPage`, `UsersPage` admin-only, badge de rol/logout en topbar y item Usuarios en sidebar solo admin.
 - FASE 9.2: script `npm run audit:code` → `scripts/audit-code.mjs` (escáner de secretos en archivos versionados, sin dependencias; falla si detecta y reporta deuda TODO/FIXME/HACK sin bloquear).
 - FASE 9.1: script `npm run audit` → `scripts/audit.mjs` (wrapper de `npm audit` con allowlist documentada GHSA-qwww-vcr4-c8h2, CSRF RSC/SSR no aplicable en SPA Electron/HashRouter).
 - FASE 7: suite de tests unitarios e integración con Vitest, cobertura configurada (domain/core/ai/ocr).
