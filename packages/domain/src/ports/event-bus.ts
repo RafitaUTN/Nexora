@@ -3,6 +3,7 @@ import type { DocumentStatus } from '../entities/document'
 export interface EventMap {
   'document:added': { documentId: number }
   'document:indexed': { documentId: number }
+  'document:classified': { documentId: number }
   'document:status': { documentId: number; status: DocumentStatus }
   'index:progress': { processed: number; total: number }
   'ocr:progress': { processed: number; total: number }

@@ -1,10 +1,14 @@
 import type {
   AppSettings,
+  AuditEntry,
+  Automation,
   Classification,
   DocumentFilter,
   DocumentSource,
   DocumentStats,
   DocumentSummary,
+  HistoryEntry,
+  NewAutomation,
   NewSource,
   NewTag,
   PagedResult,
@@ -67,6 +71,7 @@ export interface DocuMindApi {
     get(id: number): Promise<DocumentDetail | null>
     delete(id: number): Promise<{ id: number }>
     stats(): Promise<DocumentStats>
+    history(id: number): Promise<HistoryEntry[]>
   }
   sources: {
     list(): Promise<DocumentSource[]>
@@ -112,6 +117,15 @@ export interface DocuMindApi {
     create(): Promise<BackupEntry>
     list(): Promise<BackupEntry[]>
     restore(name: string): Promise<{ ok: boolean }>
+  }
+  automations: {
+    list(): Promise<Automation[]>
+    create(input: NewAutomation): Promise<Automation>
+    setEnabled(id: number, enabled: boolean): Promise<{ id: number; enabled: boolean }>
+    remove(id: number): Promise<{ id: number }>
+  }
+  audit: {
+    list(limit?: number, cursor?: number): Promise<AuditEntry[]>
   }
   updates: {
     check(): Promise<unknown>

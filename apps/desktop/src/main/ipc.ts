@@ -3,6 +3,7 @@ import type { EventBus } from '@documind/domain'
 import {
   appSettingsSchema,
   documentFilterSchema,
+  newAutomationSchema,
   newSourceSchema,
   newTagSchema,
   providerIdSchema,
@@ -106,9 +107,17 @@ export function registerIpc(context: IpcContext): void {
   })
   handle(IpcChannel.DocumentsDelete, async (id: number) => {
     await rt().documentService.remove(id)
+    await rt().auditService.record({
+      action: 'document.deleted',
+      entityType: 'document',
+      entityId: String(id),
+    })
     return { id }
   })
   handle(IpcChannel.DocumentsStats, async () => rt().documentService.stats())
+  handle(IpcChannel.DocumentsHistory, async (id: number) =>
+    rt().repos.documents.listHistory(id, 50),
+  )
 
   // Sources
   handle(IpcChannel.SourcesList, async () => rt().repos.sources.list())
@@ -136,26 +145,59 @@ export function registerIpc(context: IpcContext): void {
 
   // Tags
   handle(IpcChannel.TagsList, async () => rt().tagService.listWithStats())
-  handle(IpcChannel.TagsCreate, async (input) =>
-    rt().tagService.create(newTagSchema.parse(input)),
-  )
+  handle(IpcChannel.TagsCreate, async (input) => {
+    const tag = await rt().tagService.create(newTagSchema.parse(input))
+    await rt().auditService.record({
+      action: 'tag.create',
+      entityType: 'tag',
+      entityId: String(tag.id),
+      detail: tag.name,
+    })
+    return tag
+  })
   handle(IpcChannel.TagsAssign, async (payload: { tagId: number; documentId: number }) => {
     await rt().tagService.assign(payload.tagId, payload.documentId)
+    await rt().auditService.record({
+      action: 'tag.assign',
+      entityType: 'document',
+      entityId: String(payload.documentId),
+      detail: `Etiqueta #${payload.tagId}`,
+    })
     return { ok: true }
   })
   handle(IpcChannel.TagsRemove, async (payload: { tagId: number; documentId: number }) => {
     await rt().tagService.unassign(payload.tagId, payload.documentId)
+    await rt().auditService.record({
+      action: 'tag.unassign',
+      entityType: 'document',
+      entityId: String(payload.documentId),
+      detail: `Etiqueta #${payload.tagId}`,
+    })
     return { ok: true }
   })
   handle(IpcChannel.TagsDelete, async (id: number) => {
     await rt().tagService.delete(id)
+    await rt().auditService.record({
+      action: 'tag.delete',
+      entityType: 'tag',
+      entityId: String(id),
+    })
     return { id }
   })
 
   // AI
-  handle(IpcChannel.AiClassify, async (documentId: number) =>
-    rt().classificationService.classify(documentId),
-  )
+  handle(IpcChannel.AiClassify, async (documentId: number) => {
+    const classification = await rt().classificationService.classify(documentId)
+    if (classification) {
+      await rt().auditService.record({
+        action: 'document.classified',
+        entityType: 'document',
+        entityId: String(documentId),
+        detail: `${classification.provider}/${classification.model} · ${classification.category}`,
+      })
+    }
+    return classification
+  })
   handle(IpcChannel.AiUsage, async () => rt().repos.aiUsage.summarize())
   handle(IpcChannel.AiHealth, async () => {
     const provider = await rt().getProvider()
@@ -199,11 +241,22 @@ export function registerIpc(context: IpcContext): void {
   // Backups
   handle(IpcChannel.BackupsCreate, async () => {
     rt().db.checkpoint()
-    return rt().backups.create(dbPathOf(rt().userDataPath))
+    const backup = await rt().backups.create(dbPathOf(rt().userDataPath))
+    await rt().auditService.record({
+      action: 'backup.create',
+      entityType: 'backup',
+      entityId: backup.name,
+    })
+    return backup
   })
   handle(IpcChannel.BackupsList, async () => rt().backups.list())
   handle(IpcChannel.BackupsRestore, async (name: string) => {
     await rt().restoreBackup(name)
+    await rt().auditService.record({
+      action: 'backup.restore',
+      entityType: 'backup',
+      entityId: name,
+    })
     await context.rebuildRuntime()
     return { ok: true }
   })
@@ -215,6 +268,42 @@ export function registerIpc(context: IpcContext): void {
     return { ok: true }
   })
   handle(IpcChannel.UpdatesState, async () => rt().updates.getState())
+
+  // Automations
+  handle(IpcChannel.AutomationsList, async () => rt().automationService.list())
+  handle(IpcChannel.AutomationsCreate, async (input) => {
+    const automation = await rt().automationService.create(newAutomationSchema.parse(input))
+    await rt().auditService.record({
+      action: 'automation.create',
+      entityType: 'automation',
+      entityId: String(automation.id),
+      detail: automation.name,
+    })
+    return automation
+  })
+  handle(IpcChannel.AutomationsSetEnabled, async (payload: { id: number; enabled: boolean }) => {
+    await rt().automationService.setEnabled(payload.id, payload.enabled)
+    await rt().auditService.record({
+      action: payload.enabled ? 'automation.enable' : 'automation.disable',
+      entityType: 'automation',
+      entityId: String(payload.id),
+    })
+    return { id: payload.id, enabled: payload.enabled }
+  })
+  handle(IpcChannel.AutomationsRemove, async (id: number) => {
+    await rt().automationService.remove(id)
+    await rt().auditService.record({
+      action: 'automation.remove',
+      entityType: 'automation',
+      entityId: String(id),
+    })
+    return { id }
+  })
+
+  // Audit (historial)
+  handle(IpcChannel.AuditList, async (payload: { limit?: number; cursor?: number } = {}) =>
+    rt().auditService.list(payload.limit ?? 100, payload.cursor),
+  )
 }
 
 /** Reenvía los eventos del dominio al renderer por los canales IpcEvent. */

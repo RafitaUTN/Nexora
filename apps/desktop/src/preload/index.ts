@@ -25,6 +25,7 @@ const api: DocuMindApi = {
     get: (id) => invoke(IpcChannel.DocumentsGet, id),
     delete: (id) => invoke(IpcChannel.DocumentsDelete, id),
     stats: () => invoke(IpcChannel.DocumentsStats),
+    history: (id) => invoke(IpcChannel.DocumentsHistory, id),
   },
 
   sources: {
@@ -68,6 +69,17 @@ const api: DocuMindApi = {
     create: () => invoke(IpcChannel.BackupsCreate),
     list: () => invoke(IpcChannel.BackupsList),
     restore: (name) => invoke(IpcChannel.BackupsRestore, name),
+  },
+
+  automations: {
+    list: () => invoke(IpcChannel.AutomationsList),
+    create: (input) => invoke(IpcChannel.AutomationsCreate, input),
+    setEnabled: (id, enabled) => invoke(IpcChannel.AutomationsSetEnabled, { id, enabled }),
+    remove: (id) => invoke(IpcChannel.AutomationsRemove, id),
+  },
+
+  audit: {
+    list: (limit, cursor) => invoke(IpcChannel.AuditList, { limit, cursor }),
   },
 
   updates: {

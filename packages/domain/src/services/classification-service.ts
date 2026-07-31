@@ -142,6 +142,7 @@ export class ClassificationService {
       (parsed.entities ?? []).slice(0, 50),
     )
     this.deps.bus.emit('document:indexed', { documentId })
+    this.deps.bus.emit('document:classified', { documentId })
     return classification
   }
 

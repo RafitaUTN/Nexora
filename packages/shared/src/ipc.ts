@@ -16,6 +16,7 @@ export const IpcChannel = {
   DocumentsGet: 'documents:get',
   DocumentsDelete: 'documents:delete',
   DocumentsStats: 'documents:stats',
+  DocumentsHistory: 'documents:history',
 
   // Sources (carpetas escaneadas)
   SourcesList: 'sources:list',
@@ -52,6 +53,15 @@ export const IpcChannel = {
   BackupsCreate: 'backups:create',
   BackupsList: 'backups:list',
   BackupsRestore: 'backups:restore',
+
+  // Automations
+  AutomationsList: 'automations:list',
+  AutomationsCreate: 'automations:create',
+  AutomationsSetEnabled: 'automations:setEnabled',
+  AutomationsRemove: 'automations:remove',
+
+  // Audit
+  AuditList: 'audit:list',
 
   // Updates
   UpdatesCheck: 'updates:check',

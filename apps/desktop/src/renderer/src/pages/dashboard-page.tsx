@@ -96,6 +96,62 @@ export function DashboardPage(): JSX.Element {
         <StatCard label="Tamaño" value={s ? formatBytes(s.totalSizeBytes) : '—'} icon={<HardDrive />} loading={loading} />
       </div>
 
+      {s?.total === 0 ? (
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-sm font-semibold">Bienvenido a DocuMind</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              En tres pasos tendrás tu biblioteca documental lista.
+            </p>
+            <ol className="mt-4 grid gap-3 sm:grid-cols-3">
+              <li className="flex items-start gap-3 rounded-md border p-3">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  1
+                </span>
+                <div>
+                  <p className="text-sm font-medium">Añade una fuente</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Selecciona la carpeta con tus documentos.</p>
+                  <Link to="/sources" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                    Configurar fuentes
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                </div>
+              </li>
+              <li className="flex items-start gap-3 rounded-md border p-3">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  2
+                </span>
+                <div>
+                  <p className="text-sm font-medium">Indexa y clasifica</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Extrae texto con OCR y clasifica con IA.
+                  </p>
+                  <Link to="/settings" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                    Configurar IA
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                </div>
+              </li>
+              <li className="flex items-start gap-3 rounded-md border p-3">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  3
+                </span>
+                <div>
+                  <p className="text-sm font-medium">Automatiza</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Crea reglas que actúen por ti sobre los documentos.
+                  </p>
+                  <Link to="/automations" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                    Crear reglas
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                </div>
+              </li>
+            </ol>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between space-y-0">

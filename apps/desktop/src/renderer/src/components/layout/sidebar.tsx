@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { NavLink } from 'react-router-dom'
 import {
+  Bot,
   FileText,
   FolderInput,
   HardDriveDownload,
+  History,
   LayoutDashboard,
   Settings,
   Sparkles,
@@ -15,6 +17,8 @@ const navigation = [
   { to: '/', label: 'Inicio', icon: LayoutDashboard, end: true },
   { to: '/documents', label: 'Documentos', icon: FileText, end: false },
   { to: '/sources', label: 'Fuentes', icon: FolderInput, end: false },
+  { to: '/automations', label: 'Automatizaciones', icon: Bot, end: false },
+  { to: '/history', label: 'Historial', icon: History, end: false },
   { to: '/backups', label: 'Copias de seguridad', icon: HardDriveDownload, end: false },
   { to: '/settings', label: 'Ajustes', icon: Settings, end: false },
 ]

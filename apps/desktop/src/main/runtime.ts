@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type {
   AIProvider,
   AppSettings,
+  AutomationActions,
   DocumentSource,
   EventBus,
   FileWatcher,
@@ -11,6 +12,7 @@ import type {
 } from '@documind/domain'
 import {
   AuditService,
+  AutomationService,
   ClassificationService,
   DocumentService,
   SearchService,
@@ -87,6 +89,7 @@ export interface AppRuntime {
   searchService: SearchService
   tagService: TagService
   auditService: AuditService
+  automationService: AutomationService
   classificationService: ClassificationService
   indexing: IndexingService
   ocrEngine: OCREngine | null
@@ -162,6 +165,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
   const searchService = new SearchService(repositories.search)
   const tagService = new TagService(repositories.tags, bus)
   const auditService = new AuditService(repositories.audit)
+  const automationService = new AutomationService(repositories.automation, bus)
 
   const ocrEngine =
     options.ocrEngine !== undefined
@@ -258,6 +262,40 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
     })()
   })
 
+  // Automatizaciones: reglas que reaccionan a eventos del dominio.
+  const automationActions: AutomationActions = {
+    async tag(documentId, tagNames) {
+      const tags = await tagService.ensureSuggested(tagNames)
+      for (const tag of tags) await repositories.tags.assign(tag.id, documentId)
+    },
+    async classify(documentId) {
+      await classificationService.classify(documentId)
+    },
+  }
+  const runningAutomations = new Set<number>()
+  const runAutomations = (
+    trigger: 'document:indexed' | 'document:classified',
+    documentId: number,
+  ): void => {
+    if (runningAutomations.has(documentId)) return
+    runningAutomations.add(documentId)
+    void automationService.runForTrigger(trigger, documentId, automationActions).finally(() => {
+      runningAutomations.delete(documentId)
+    })
+  }
+  bus.on('document:indexed', ({ documentId }) => runAutomations('document:indexed', documentId))
+  bus.on('document:classified', ({ documentId }) =>
+    runAutomations('document:classified', documentId),
+  )
+  bus.on('automation:run', ({ automationId, documentId, ok }) => {
+    void auditService.record({
+      action: ok ? 'automation.run' : 'automation.failed',
+      entityType: 'automation',
+      entityId: String(automationId),
+      detail: ok ? `Documento #${documentId}` : `Falló en documento #${documentId}`,
+    })
+  })
+
   const backups = new BackupManager(join(userDataPath, BACKUPS_DIR), logger)
   const updates = new UpdateManager(settingsService)
 
@@ -272,6 +310,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
     searchService,
     tagService,
     auditService,
+    automationService,
     get classificationService(): ClassificationService {
       return classificationService
     },

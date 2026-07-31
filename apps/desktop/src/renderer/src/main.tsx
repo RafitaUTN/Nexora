@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
+import { HashRouter } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/toast'
 import { queryClient } from '@/lib/query-client'
@@ -15,12 +15,12 @@ function AppContent(): JSX.Element {
 
 function Root(): JSX.Element {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <QueryClientProvider client={queryClient}>
         <AppContent />
         <Toaster />
       </QueryClientProvider>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
 

@@ -54,6 +54,12 @@ export function DocumentDetailPage(): JSX.Element {
 
   const tags = useQuery({ queryKey: queryKeys.tags, queryFn: () => window.api.tags.list() })
 
+  const history = useQuery({
+    queryKey: queryKeys.documentHistory(documentId),
+    queryFn: () => window.api.documents.history(documentId),
+    enabled: Number.isFinite(documentId),
+  })
+
   const invalidateDetail = (): void => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.document(documentId) })
     void queryClient.invalidateQueries({ queryKey: queryKeys.tags })
@@ -299,6 +305,34 @@ export function DocumentDetailPage(): JSX.Element {
             </pre>
           ) : (
             <p className="text-sm text-muted-foreground">Sin contenido extraído todavía.</p>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-lg border bg-card">
+        <div className="border-b p-4">
+          <h2 className="text-base font-semibold">Historial</h2>
+        </div>
+        <div className="p-4">
+          {history.isLoading ? (
+            <Skeleton className="h-16" />
+          ) : history.data && history.data.length > 0 ? (
+            <ul className="divide-y">
+              {history.data.map((entry) => (
+                <li key={entry.id} className="flex items-baseline gap-3 py-2">
+                  <Badge tone="neutral">{entry.action}</Badge>
+                  <div className="min-w-0 flex-1">
+                    {entry.detail ? <p className="truncate text-sm">{entry.detail}</p> : null}
+                    {entry.actor ? (
+                      <p className="text-xs text-muted-foreground">{entry.actor}</p>
+                    ) : null}
+                  </div>
+                  <span className="shrink-0 text-xs text-muted-foreground">{formatDateTime(entry.createdAt)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">Sin actividad registrada.</p>
           )}
         </div>
       </section>
