@@ -23,6 +23,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); vers
 - Cobertura reconfirmada con Vitest 4 (91.77 / 80.77 / 90.9 / 93.02 vs thresholds 90/90/80/90) con tests nuevos: `paged()` en entities/document, health con errores no-Error (ollama/openrouter), `warn`/`error` sin stack en logger, búsqueda edge-cases y confidence NULL en `sqlite-*` repos.
 
 ### Corregido
+- E2E smoke (FASE 8.2) roto por la autenticación de FASE 10: con userData limpio la app arrancaba en `SetupPage`; el test ahora crea el admin y abre sesión vía `api.auth` antes del reload.
 - FASE 9.2: `security.yml` usaba `npm audit --audit-level=high`, que fallaba por el advisory allowlist de react-router; ahora usa `npm run audit`. Eliminado script raíz `release` (referenciaba `scripts/release.mjs` inexistente).
 - Patrón setState-en-render en `settings-page.tsx` (regla `react-hooks/set-state-in-effect` de react-hooks 7): ajuste-en-render con `lastData` + `dirty`.
 - `eslint.config.mjs` para ESLint 10/react-hooks 7: `react-hooks/incompatible-library: off` (ruido del React Compiler, no usado) y globals de Node para `scripts/**/*.mjs`.

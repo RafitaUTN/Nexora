@@ -45,7 +45,7 @@
 ### FASE 7 — Testing y auditoría final
 - Unit (domain/core/ai/ocr) con fakes de puertos, coverage ≥ 90%. ✅ (107 tests, 85% → thresholds 85)
 - Integration (repositorios contra SQLite temporal, AIProvider contra mock server). ✅
-- E2E Playwright (smoke: abrir, escanear carpeta, buscar). ⏳ Pendiente
+- E2E Playwright (smoke: abrir, escanear carpeta, buscar). ✅ (detallado en FASE 8.2; adaptado en FASE 11 al flujo de autenticación)
 - Auditoría: ESLint import/no-restricted, `npm audit`, CodeQL report, revisión deuda técnica. ✅ Parcial (deps + `npm audit` en FASE 9.1; CodeQL/deuda → FASE 9.2)
 
 ### FASE 8 — Tests OCR y cobertura ≥ 90%
@@ -54,6 +54,7 @@
 - FASE 8.2 E2E Playwright (smoke: abrir, escanear carpeta, buscar). ✅
   - `@playwright/test`, `playwright.config.ts`, `e2e/smoke.spec.ts` (lanza Electron con la build, `DOCUMIND_USER_DATA` aislado, añade fuente por API, escanea y busca).
   - Job `e2e` en CI (ubuntu + `xvfb-run`).
+  - Adaptado en FASE 11: primer arranque ahora crea el admin (`auth.setup` + `auth.login`) antes del reload, por la compuerta de autenticación de FASE 10.
 - FASE 8.3 Cobertura ≥ 90% líneas/funciones, ≥ 80% ramas. ✅ (94.86% / 90.59% / 82.54%)
   - Cubiertos los 4 repositorios a 0%: sources, classification, ocr_queue, ai_cache/ai_usage (tests de integración).
   - Añadido health fallback de Ollama (ramas del catch).

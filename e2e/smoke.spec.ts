@@ -19,6 +19,11 @@ interface SourcesApi {
   }): Promise<{ id: number }>
 }
 
+interface AuthApi {
+  setup(input: { username: string; password: string; displayName: string; role: 'admin' }): Promise<unknown>
+  login(username: string, password: string): Promise<unknown>
+}
+
 /** Crea una carpeta temporal con un documento de texto indexable. */
 function makeFixture(): { dir: string; filename: string } {
   const dir = mkdtempSync(join(tmpdir(), 'documind-e2e-'))
@@ -42,6 +47,18 @@ test('smoke: abrir la app, escanear una carpeta y buscar', async () => {
   await page.waitForLoadState('domcontentloaded')
 
   try {
+    // FASE 10: primer arranque exige crear el admin y abrir sesión vía API.
+    await page.waitForFunction(() => {
+      const api = (window as unknown as { api: { auth: AuthApi } }).api
+      return typeof api?.auth?.setup === 'function'
+    })
+    await page.evaluate(async () => {
+      const auth = (window as unknown as { api: { auth: AuthApi } }).api.auth
+      await auth.setup({ username: 'e2e', password: 'E2E-password-123', displayName: 'E2E', role: 'admin' })
+      await auth.login('e2e', 'E2E-password-123')
+    })
+    await page.reload()
+
     // La app arranca en el Dashboard con la barra lateral visible.
     await expect(page.getByRole('link', { name: 'Documentos', exact: true })).toBeVisible({ timeout: 30_000 })
 
