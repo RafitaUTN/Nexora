@@ -8,6 +8,12 @@ import { createRuntime, type AppRuntime } from './runtime'
 import { registerIpc, wireEvents, type IpcContext } from './ipc'
 import { createMainWindow } from './window'
 
+// Permite aislar los datos (BD, claves) en tests E2E: DOCUMIND_USER_DATA=<directorio temporal>.
+const userDataOverride = process.env['DOCUMIND_USER_DATA']
+if (userDataOverride) {
+  app.setPath('userData', userDataOverride)
+}
+
 let mainWindow: BrowserWindow | null = null
 let runtime: AppRuntime | null = null
 let unsubscribeEvents: (() => void) | null = null
@@ -17,10 +23,12 @@ let unsubscribeUpdates: (() => void) | null = null
 function wireUpdates(): void {
   unsubscribeUpdates?.()
   const rt = runtime
-  unsubscribeUpdates = rt ? rt.updates.onStatus((status) => {
-    const win = mainWindow
-    if (win && !win.isDestroyed()) win.webContents.send(IpcEvent.EventUpdateStatus, status)
-  }) : null
+  unsubscribeUpdates = rt
+    ? rt.updates.onStatus((status) => {
+        const win = mainWindow
+        if (win && !win.isDestroyed()) win.webContents.send(IpcEvent.EventUpdateStatus, status)
+      })
+    : null
 }
 
 /** Secreto maestro cifrado con safeStorage (fallback a fichero plano en dev). */
@@ -102,7 +110,9 @@ if (!gotTheLock) {
       if (process.env['DOCUMIND_SMOKE'] === '1') {
         const settings = await runtime.settingsService.get()
         const provider = await runtime.getProvider()
-        console.log(`ELECTRON_SMOKE_OK settings.ai=${settings.ai.provider} provider=${provider?.id ?? 'none'}`)
+        console.log(
+          `ELECTRON_SMOKE_OK settings.ai=${settings.ai.provider} provider=${provider?.id ?? 'none'}`,
+        )
         await runtime.dispose()
         app.quit()
         return

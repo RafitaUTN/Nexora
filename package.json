@@ -23,6 +23,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed",
     "smoke": "npm run smoke:document && npm run smoke:ocr && npm run smoke:index && npm run smoke:main && npm run smoke:automations",
     "smoke:document": "tsx scripts/smoke-document.ts",
     "smoke:ocr": "tsx scripts/smoke-ocr.ts",
@@ -36,6 +38,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
+    "@playwright/test": "1.62.1",
     "@types/node": "^22.5.0",
     "@types/pdfkit": "^0.17.6",
     "@typescript-eslint/eslint-plugin": "^8.3.0",

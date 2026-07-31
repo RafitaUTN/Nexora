@@ -51,7 +51,9 @@
 ### FASE 8 — Tests OCR y cobertura ≥ 90%
 - FASE 8.1 Unit tests de `packages/ocr` (engine + worker): pool, cola, concurrencia, errores, health, dispose. ✅ (13 tests)
   - Bug real corregido: `recognize()` simultáneos durante el arranque duplicaban el pool (spawn) → `workersReady` compartido.
-- FASE 8.2 E2E Playwright (smoke: abrir, escanear carpeta, buscar). ⏳ Pendiente
+- FASE 8.2 E2E Playwright (smoke: abrir, escanear carpeta, buscar). ✅
+  - `@playwright/test`, `playwright.config.ts`, `e2e/smoke.spec.ts` (lanza Electron con la build, `DOCUMIND_USER_DATA` aislado, añade fuente por API, escanea y busca).
+  - Job `e2e` en CI (ubuntu + `xvfb-run`).
 - FASE 8.3 Cobertura ≥ 90% líneas/funciones, ≥ 80% ramas. ✅ (94.86% / 90.59% / 82.54%)
   - Cubiertos los 4 repositorios a 0%: sources, classification, ocr_queue, ai_cache/ai_usage (tests de integración).
   - Añadido health fallback de Ollama (ramas del catch).
