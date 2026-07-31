@@ -1,4 +1,6 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { statSync } from 'node:fs'
+import { basename } from 'node:path'
 import type { EventBus } from '@documind/domain'
 import {
   appSettingsSchema,
@@ -58,6 +60,48 @@ export function registerIpc(context: IpcContext): void {
     arch: process.arch,
   }))
   handle(IpcChannel.SystemPing, async () => ({ pong: true }))
+
+  // Importar archivos/carpetas soltadas (drag & drop)
+  handle(IpcChannel.SystemImportPaths, async (paths: string[]) => {
+    const unique = [...new Set(paths.filter((p) => p && p.trim().length > 0))]
+    if (unique.length === 0) return { scanned: 0, indexed: 0, errors: [] }
+
+    const errors: string[] = []
+    let scanned = 0
+    let indexed = 0
+
+    for (const path of unique) {
+      try {
+        const info = statSync(path)
+        if (info.isDirectory()) {
+          const existing = (await rt().repos.sources.list()).find((s) => s.path === path)
+          const source =
+            existing ??
+            (await rt().repos.sources.add({
+              path,
+              name: basename(path),
+              kind: 'folder',
+              scanMode: 'recursive',
+              enabled: true,
+            }))
+          const result = await rt().scanSource(source.id)
+          scanned += result.scanned
+          indexed += result.indexed
+        } else if (info.isFile()) {
+          const filename = basename(path)
+          const ok = await rt().scanPath(path, filename, null)
+          if (ok) {
+            scanned += 1
+            indexed += 1
+          }
+        }
+      } catch (error) {
+        errors.push(`${path}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+
+    return { scanned, indexed, errors }
+  })
 
   // Dialog (selector nativo de carpeta/archivo para añadir fuentes)
   const dialogHandle = (

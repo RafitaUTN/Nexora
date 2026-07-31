@@ -8,6 +8,7 @@ import { SettingsPage } from '@/pages/settings-page'
 import { BackupsPage } from '@/pages/backups-page'
 import { AutomationsPage } from '@/pages/automations-page'
 import { HistoryPage } from '@/pages/history-page'
+import { TagsPage } from '@/pages/tags-page'
 
 export default function App(): JSX.Element {
   return (
@@ -17,6 +18,7 @@ export default function App(): JSX.Element {
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="documents/:id" element={<DocumentDetailPage />} />
         <Route path="sources" element={<SourcesPage />} />
+        <Route path="tags" element={<TagsPage />} />
         <Route path="automations" element={<AutomationsPage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="settings" element={<SettingsPage />} />

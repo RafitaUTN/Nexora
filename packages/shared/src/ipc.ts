@@ -6,6 +6,7 @@ export const IpcChannel = {
   // System
   SystemInfo: 'system:info',
   SystemPing: 'system:ping',
+  SystemImportPaths: 'system:importPaths',
 
   // Dialog (selección de carpetas/archivos)
   DialogSelectFolder: 'dialog:selectFolder',

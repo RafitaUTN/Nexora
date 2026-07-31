@@ -1,9 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { Link, useSearchParams } from 'react-router-dom'
 import { FileText, Search, Trash2 } from 'lucide-react'
 import type { DocumentStatus, DocumentSummary } from '@documind/domain'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -71,6 +71,7 @@ export function DocumentsPage(): JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams()
   const [queryInput, setQueryInput] = useState(searchParams.get('q') ?? '')
   const [pendingDelete, setPendingDelete] = useState<number | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const q = searchParams.get('q') ?? ''
   const tagId = searchParams.get('tagId') ? Number(searchParams.get('tagId')) : undefined
@@ -170,6 +171,21 @@ export function DocumentsPage(): JSX.Element {
 
   const loading = searching ? search.isLoading : list.isInitialLoading
 
+  const rowVirtualizer = useVirtualizer({
+    count: rows?.length ?? 0,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 54,
+    overscan: 10,
+  })
+
+  const onScroll = (): void => {
+    const el = scrollRef.current
+    if (!el || searching || !list.hasNextPage || list.isFetchingNextPage) return
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
+      void list.fetchNextPage()
+    }
+  }
+
   const renderFilters = (): ReactNode => (
     <div className="flex flex-wrap items-center gap-2">
       <div className="relative w-full max-w-xs">
@@ -254,20 +270,30 @@ export function DocumentsPage(): JSX.Element {
             />
           </div>
         ) : (
-          <ul className="divide-y">
-            {rows?.map((row) => (
-              <DocumentRow key={row.id} row={row} onDelete={(id) => setPendingDelete(id)} />
-            ))}
-          </ul>
+          <div ref={scrollRef} className="max-h-[70vh] overflow-y-auto" onScroll={onScroll}>
+            <div className="relative" style={{ height: rowVirtualizer.getTotalSize() }}>
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const row = rows?.[virtualRow.index]
+                if (!row) return null
+                return (
+                  <div
+                    key={virtualRow.key}
+                    className="absolute left-0 top-0 w-full border-b border-border/60"
+                    style={{ height: virtualRow.size, transform: `translateY(${virtualRow.start}px)` }}
+                  >
+                    <DocumentRow row={row} onDelete={(id) => setPendingDelete(id)} />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         )}
       </div>
 
       {!searching && list.hasNextPage ? (
-        <div className="flex justify-center">
-          <Button variant="outline" onClick={() => void list.fetchNextPage()} disabled={list.isFetchingNextPage}>
-            {list.isFetchingNextPage ? 'Cargando…' : 'Cargar más'}
-          </Button>
-        </div>
+        <p className="text-center text-xs text-muted-foreground">
+          {list.isFetchingNextPage ? 'Cargando más…' : 'Desliza para cargar más documentos'}
+        </p>
       ) : null}
 
       <ConfirmDialog

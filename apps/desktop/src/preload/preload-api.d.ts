@@ -65,6 +65,10 @@ export interface DocuMindApi {
     ping(): Promise<{ pong: boolean }>
     selectFolder(): Promise<string | null>
     selectFile(): Promise<string | null>
+    importPaths(paths: string[]): Promise<ScanResult>
+  }
+  files: {
+    getPath(file: File): string
   }
   documents: {
     list(filter?: Partial<DocumentFilter>): Promise<PagedResult<DocumentSummary>>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
+import { DragDropLayer } from './drag-drop-layer'
 import { CommandPalette } from '@/components/command-palette'
 
 export function AppShell(): JSX.Element {
@@ -32,6 +33,7 @@ export function AppShell(): JSX.Element {
         </main>
       </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <DragDropLayer />
     </div>
   )
 }

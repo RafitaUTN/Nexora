@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Settings,
   Sparkles,
+  Tag,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { queryKeys } from '@/lib/query-keys'
@@ -17,6 +18,7 @@ const navigation = [
   { to: '/', label: 'Inicio', icon: LayoutDashboard, end: true },
   { to: '/documents', label: 'Documentos', icon: FileText, end: false },
   { to: '/sources', label: 'Fuentes', icon: FolderInput, end: false },
+  { to: '/tags', label: 'Etiquetas', icon: Tag, end: false },
   { to: '/automations', label: 'Automatizaciones', icon: Bot, end: false },
   { to: '/history', label: 'Historial', icon: History, end: false },
   { to: '/backups', label: 'Copias de seguridad', icon: HardDriveDownload, end: false },

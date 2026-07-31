@@ -43,6 +43,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
               <Command.Item onSelect={() => go('/')}>Inicio</Command.Item>
               <Command.Item onSelect={() => go('/documents')}>Documentos</Command.Item>
               <Command.Item onSelect={() => go('/sources')}>Fuentes</Command.Item>
+              <Command.Item onSelect={() => go('/tags')}>Etiquetas</Command.Item>
               <Command.Item onSelect={() => go('/automations')}>Automatizaciones</Command.Item>
               <Command.Item onSelect={() => go('/history')}>Historial</Command.Item>
               <Command.Item onSelect={() => go('/backups')}>Copias de seguridad</Command.Item>

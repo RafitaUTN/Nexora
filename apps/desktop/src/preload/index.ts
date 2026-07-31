@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import { IpcChannel, IpcEvent } from '@documind/shared'
 import type { DocuMindApi } from './preload-api'
 
@@ -18,6 +18,11 @@ const api: DocuMindApi = {
     ping: () => invoke(IpcChannel.SystemPing),
     selectFolder: () => invoke(IpcChannel.DialogSelectFolder),
     selectFile: () => invoke(IpcChannel.DialogSelectFile),
+    importPaths: (paths) => invoke(IpcChannel.SystemImportPaths, paths),
+  },
+
+  files: {
+    getPath: (file) => webUtils.getPathForFile(file),
   },
 
   documents: {
