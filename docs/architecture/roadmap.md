@@ -67,6 +67,11 @@
   - `npm audit`: de 25 → 2 vulnerabilidades high, ambas `react-router`/`react-router-dom` (GHSA-qwww-vcr4-c8h2, CSRF solo en RSC/SSR — no aplicable en SPA Electron/HashRouter); allowlist documentada en `scripts/audit.mjs` + script `npm run audit`.
   - Cobertura reconfirmada tras el upgrade (91.77 / 80.77 / 90.9 / 93.02) con tests nuevos: `paged()` en `document.ts`, health con errores no-Error en providers, `warn`/`error` sin stack en logger, búsqueda edge-cases y confidence NULL en SQLite.
   - `build`, `e2e` y `npm run audit` verificados localmente.
+- FASE 9.2 CI multi-OS, cobertura v8 y auditoría de código. ✅
+  - `ci.yml`: job `verify` en matrix `ubuntu/windows/macos` (lint, typecheck, tests, smoke, build); job `coverage` (v8 + upload de `coverage/`); `e2e` en ubuntu (xvfb).
+  - `security.yml`: audit con `npm run audit` (allowlist GHSA-qwww-vcr4-c8h2) en vez de `npm audit --audit-level=high` (que fallaba por el advisory permitido); CodeQL ampliado a `security-and-quality`.
+  - `scripts/audit-code.mjs`: escáner de secretos en archivos versionados (falla si detecta) + reporte de deuda TODO/FIXME/HACK (no bloquea); script raíz `audit:code`.
+  - Eliminado script raíz `release` (referenciaba `scripts/release.mjs` inexistente); `docs/guides/contributing.md` actualizado.
 
 ## Post-MVP
 - Usuarios multi-rol (Argon2, sesiones), activación de licencias online, sincronización Supabase/Postgres, colaboración, plugin de búsqueda de escritorio (Raycast-style).
