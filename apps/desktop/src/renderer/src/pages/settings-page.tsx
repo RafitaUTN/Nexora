@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { KeyRound, Save, Trash2, Wifi } from 'lucide-react'
-import type { AppSettings, ProviderId } from '@documind/domain'
+import { Download, KeyRound, RefreshCw, Save, Trash2, Wifi } from 'lucide-react'
+import { IpcEvent } from '@documind/shared'
+import type { AppSettings, ProviderId, UpdateStatus } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -35,6 +36,10 @@ interface SettingsForm {
   sendWholeDocument: boolean
   maxCacheAgeDays: string
   requestsPerMinute: string
+  autoCheck: boolean
+  autoDownload: boolean
+  channel: 'stable' | 'beta'
+  checkIntervalHours: string
 }
 
 function toForm(settings: AppSettings): SettingsForm {
@@ -50,6 +55,10 @@ function toForm(settings: AppSettings): SettingsForm {
     sendWholeDocument: settings.ai.sendWholeDocument,
     maxCacheAgeDays: String(settings.ai.maxCacheAgeDays),
     requestsPerMinute: String(settings.ai.requestsPerMinute),
+    autoCheck: settings.updates.autoCheck,
+    autoDownload: settings.updates.autoDownload,
+    channel: settings.updates.channel,
+    checkIntervalHours: String(settings.updates.checkIntervalHours),
   }
 }
 
@@ -123,6 +132,80 @@ function ProviderApiKeyRow({ provider }: { provider: ProviderId }): JSX.Element 
   )
 }
 
+const STATUS_META: Record<UpdateStatus['status'], { label: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'error' }> = {
+  idle: { label: 'Sin comprobar', tone: 'neutral' },
+  checking: { label: 'Comprobando…', tone: 'info' },
+  available: { label: 'Actualización disponible', tone: 'warning' },
+  current: { label: 'Actualizado', tone: 'success' },
+  downloading: { label: 'Descargando…', tone: 'info' },
+  downloaded: { label: 'Lista para instalar', tone: 'success' },
+  error: { label: 'Error', tone: 'error' },
+}
+
+function UpdatesSection(): JSX.Element {
+  const push = useToasts((s) => s.push)
+  const [status, setStatus] = useState<UpdateStatus | null>(null)
+
+  useEffect(() => {
+    void window.api.updates.state().then(setStatus)
+    return window.api.on<UpdateStatus>(IpcEvent.EventUpdateStatus, setStatus)
+  }, [])
+
+  const checkMutation = useMutation({
+    mutationFn: () => window.api.updates.check(),
+    onSuccess: (next) => setStatus(next),
+    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo buscar actualizaciones', body: error.message }),
+  })
+
+  const installMutation = useMutation({
+    mutationFn: () => window.api.updates.install(),
+    onSuccess: () => push({ kind: 'success', title: 'Reiniciando para instalar…' }),
+    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo instalar', body: error.message }),
+  })
+
+  const meta = status ? STATUS_META[status.status] : STATUS_META.idle
+
+  return (
+    <div className="space-y-4 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Badge tone={meta.tone}>{meta.label}</Badge>
+          {status && status.currentVersion ? (
+            <p className="text-sm text-muted-foreground">
+              Versión {status.currentVersion}
+              {status.latestVersion ? ` → ${status.latestVersion}` : ''}
+            </p>
+          ) : null}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => checkMutation.mutate()}
+          disabled={checkMutation.isPending || status?.status === 'downloading'}
+        >
+          {checkMutation.isPending ? <Spinner /> : <RefreshCw />}
+          Buscar actualizaciones
+        </Button>
+      </div>
+
+      {status?.message ? <p className="text-sm text-destructive">{status.message}</p> : null}
+
+      {status?.status === 'downloading' ? (
+        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div className="h-full bg-primary transition-all" style={{ width: `${status.progress ?? 0}%` }} />
+        </div>
+      ) : null}
+
+      {status?.status === 'downloaded' ? (
+        <Button size="sm" onClick={() => installMutation.mutate()} disabled={installMutation.isPending}>
+          {installMutation.isPending ? <Spinner /> : <Download />}
+          Reiniciar e instalar
+        </Button>
+      ) : null}
+    </div>
+  )
+}
+
 export function SettingsPage(): JSX.Element {
   const queryClient = useQueryClient()
   const push = useToasts((s) => s.push)
@@ -159,6 +242,12 @@ export function SettingsPage(): JSX.Element {
           sendWholeDocument: form.sendWholeDocument,
           maxCacheAgeDays: Number(form.maxCacheAgeDays),
           requestsPerMinute: Number(form.requestsPerMinute),
+        },
+        updates: {
+          autoCheck: form.autoCheck,
+          autoDownload: form.autoDownload,
+          channel: form.channel,
+          checkIntervalHours: Number(form.checkIntervalHours),
         },
       })
     },
@@ -335,6 +424,48 @@ export function SettingsPage(): JSX.Element {
               <p className="text-xs text-muted-foreground">Si no, se envía un extracto</p>
             </div>
             <Switch checked={form.sendWholeDocument} onCheckedChange={(checked) => set('sendWholeDocument', checked)} />
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border bg-card">
+        <div className="border-b p-4">
+          <h2 className="text-base font-semibold">Actualizaciones</h2>
+          <p className="text-xs text-muted-foreground">Comprobación e instalación automática de nuevas versiones.</p>
+        </div>
+        <UpdatesSection />
+        <div className="grid gap-4 border-t p-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="settings-updates-channel">Canal</Label>
+            <Select id="settings-updates-channel" value={form.channel} onChange={(e) => set('channel', e.target.value as SettingsForm['channel'])}>
+              <option value="stable">Estable</option>
+              <option value="beta">Beta</option>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="settings-updates-interval">Comprobar cada (horas, 1–168)</Label>
+            <Input
+              id="settings-updates-interval"
+              type="number"
+              min={1}
+              max={168}
+              value={form.checkIntervalHours}
+              onChange={(e) => set('checkIntervalHours', e.target.value)}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium">Comprobar automáticamente</p>
+              <p className="text-xs text-muted-foreground">Al iniciar y según el intervalo</p>
+            </div>
+            <Switch checked={form.autoCheck} onCheckedChange={(checked) => set('autoCheck', checked)} />
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium">Descargar automáticamente</p>
+              <p className="text-xs text-muted-foreground">La instalación sigue siendo manual</p>
+            </div>
+            <Switch checked={form.autoDownload} onCheckedChange={(checked) => set('autoDownload', checked)} />
           </div>
         </div>
       </section>

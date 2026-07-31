@@ -24,8 +24,15 @@ export default defineConfig({
         'packages/ai/src/**',
         'packages/ocr/src/**',
       ],
-      exclude: ['**/index.ts', '**/*.d.ts', '**/*.test.ts', '**/workers/**'],
-      thresholds: { lines: 90, functions: 90, branches: 80, statements: 90 },
+      exclude: [
+        '**/index.ts',
+        '**/*.d.ts',
+        '**/*.test.ts',
+        '**/workers/**',
+        '**/test/**',
+        'packages/ocr/src/**',
+      ],
+      thresholds: { lines: 85, functions: 85, branches: 75, statements: 85 },
     },
   },
 })

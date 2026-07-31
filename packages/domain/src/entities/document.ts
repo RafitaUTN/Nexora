@@ -75,7 +75,8 @@ export const documentFilterSchema = z.object({
   sort: z.enum(['addedAt', 'updatedAt', 'filename', 'sizeBytes']).default('addedAt'),
   direction: z.enum(['asc', 'desc']).default('desc'),
 })
-export type DocumentFilter = z.infer<typeof documentFilterSchema>
+/** Tipo de entrada: `sort`, `limit` y `direction` son opcionales (los aplica el consumidor). */
+export type DocumentFilter = z.input<typeof documentFilterSchema>
 
 export const documentStatsSchema = z.object({
   total: z.number(),

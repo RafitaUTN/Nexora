@@ -7,6 +7,19 @@ Basado en **electron-updater** (ADR-0008). Se eligió tras evaluar alternativas;
 - **Rollback** automático conservando la versión anterior.
 - Canales `beta`/`stable` mediante etiquetas de Release.
 
+## 0. Estado de implementación
+
+| Elemento | Estado |
+|---|---|
+| `UpdateManager` con electron-updater (`check`/`install`/estado) en `apps/desktop/src/main/updates.ts` | ✅ |
+| Evento `event:update:status` → renderer (`wireUpdates` en `index.ts`) | ✅ |
+| UI de actualizaciones en Ajustes (comprobar, descargar, instalar, config autoCheck/autoDownload/canal/intervalo) | ✅ |
+| `electron-builder.yml` `publish: github` (`RafitaUTN/Nexora`) + scripts `publish:*` | ✅ |
+| Comprobación periódica (intervalo configurado) iniciada desde la app | ⏳ pendiente |
+| Firma de código + validación de certificado | ⏳ requiere certificados |
+| Health-check/rollback tras instalar | ⏳ pendiente |
+| Changelog visible desde la app | ⏳ pendiente |
+
 ## 1. Flujo de publicación (CI)
 
 ```

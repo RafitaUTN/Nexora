@@ -1,5 +1,15 @@
 # Pipeline CI/CD
 
+## 0. Estado de implementación
+
+| Elemento | Estado |
+|---|---|
+| `ci.yml` (push/PR → lint, typecheck, test, smoke, build + verificación de artefactos) | ✅ |
+| `release.yml` (tag `v*` → build x3 OS + `--publish always` a GitHub Releases) | ✅ (sin firma aún) |
+| `security.yml` (npm audit + CodeQL) | ✅ |
+| Playwright E2E (smoke de la app empaquetada) | ⏳ FASE 7 pendiente |
+| Firma Authenticode / notarización macOS | ⏳ requiere certificados |
+
 ## 1. Flujo de trabajo GitHub Actions
 
 ```mermaid

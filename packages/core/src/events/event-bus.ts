@@ -14,9 +14,11 @@ export class InMemoryEventBus implements EventBus {
     if (!set) return
     for (const handler of set) {
       queueMicrotask(() => {
-        void Promise.resolve(handler(payload as EventMap[EventName])).catch((error) => {
-          console.error(`[bus] error en handler de "${event}":`, error)
-        })
+        Promise.resolve()
+          .then(() => handler(payload as EventMap[EventName]))
+          .catch((error) => {
+            console.error(`[bus] error en handler de "${event}":`, error)
+          })
       })
     }
   }

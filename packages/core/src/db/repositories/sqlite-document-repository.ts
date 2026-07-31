@@ -132,7 +132,7 @@ export class SqliteDocumentRepository implements DocumentRepository {
       params.push(filter.tagId)
     }
 
-    const limit = filter.limit
+    const limit = filter.limit ?? 50
     const sort = SORT_COLUMNS[filter.sort ?? 'addedAt']
     const dir = filter.direction === 'asc' ? 'ASC' : 'DESC'
     const sql = `SELECT ${SELECT_COLUMNS} FROM documents WHERE ${where.join(' AND ')}

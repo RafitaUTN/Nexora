@@ -1,4 +1,5 @@
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync } from './node-sqlite'
+import type { DatabaseSync as DatabaseSyncType } from './node-sqlite'
 
 type SqlValue = string | number | bigint | Buffer | Uint8Array | null
 
@@ -27,7 +28,7 @@ function rowWithBuffers(row: Record<string, unknown>): Record<string, unknown> {
  * específico que requieran rebuild para Electron.
  */
 export class SqliteDatabase {
-  readonly db: DatabaseSync
+  readonly db: DatabaseSyncType
 
   constructor(filePath: string) {
     this.db = new DatabaseSync(filePath)

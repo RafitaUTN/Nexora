@@ -47,6 +47,14 @@ export interface ApiKeyStatus {
   set: boolean
 }
 
+export interface UpdateStatus {
+  status: 'idle' | 'checking' | 'available' | 'current' | 'downloading' | 'downloaded' | 'error'
+  currentVersion: string
+  latestVersion?: string
+  progress?: number
+  message?: string
+}
+
 export interface BackupEntry {
   name: string
   createdAt: string
@@ -132,9 +140,9 @@ export interface DocuMindApi {
     list(limit?: number, cursor?: number): Promise<AuditEntry[]>
   }
   updates: {
-    check(): Promise<unknown>
+    check(): Promise<UpdateStatus>
     install(): Promise<{ ok: boolean }>
-    state(): Promise<unknown>
+    state(): Promise<UpdateStatus>
   }
   on<T>(channel: IpcEvent, callback: (payload: T) => void): () => void
 }

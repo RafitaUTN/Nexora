@@ -1,4 +1,4 @@
-import type { AppSettings } from '../entities/settings'
+import type { AppSettings, SettingsPatch } from '../entities/settings'
 import { appSettingsSchema, defaultSettings } from '../entities/settings'
 import type { SettingsRepository } from '../ports/repositories'
 
@@ -20,7 +20,7 @@ export class SettingsService {
     }
   }
 
-  async update(patch: Partial<AppSettings>): Promise<AppSettings> {
+  async update(patch: SettingsPatch): Promise<AppSettings> {
     const current = await this.get()
     const merged = appSettingsSchema.parse({ ...current, ...patch })
     await this.repo.set(SETTINGS_KEY, JSON.stringify(merged))

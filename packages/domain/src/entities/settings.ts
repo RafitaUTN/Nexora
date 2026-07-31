@@ -32,6 +32,14 @@ export const appSettingsSchema = z.object({
 })
 export type AppSettings = z.infer<typeof appSettingsSchema>
 
+/** Parche de configuración: objetos anidados (`ai`, `updates`) también parciales. */
+export type SettingsPatch = Partial<
+  Omit<AppSettings, 'ai' | 'updates'> & {
+    ai?: Partial<AiSettings>
+    updates?: Partial<UpdateSettings>
+  }
+>
+
 export const defaultSettings = (): AppSettings =>
   appSettingsSchema.parse({
     ai: {},

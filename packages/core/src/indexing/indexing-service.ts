@@ -7,12 +7,17 @@ import type {
   OCRResult,
   OcrQueueRepository,
 } from '@documind/domain'
-import type { ExtractionService } from '@documind/document'
+import type { ExtractedDocument, ExtractOptions } from '@documind/document'
 import type { ClassificationService } from '@documind/domain'
 import type { OCREngine } from '@documind/domain'
 
+/** Superficie pública de extracción que consume el indexador (fácil de fakear). */
+export interface TextExtractor {
+  extract(buffer: Uint8Array, filename: string, options?: ExtractOptions): Promise<ExtractedDocument>
+}
+
 export interface IndexingDeps {
-  extraction: ExtractionService
+  extraction: TextExtractor
   documents: DocumentRepository
   ocrQueue: OcrQueueRepository
   classifier: ClassificationService
