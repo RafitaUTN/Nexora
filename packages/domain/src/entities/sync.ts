@@ -65,6 +65,8 @@ export const syncSettingsSchema = z.object({
   url: z.string().default(''),
   /** Clave publicable de Supabase (segura para clientes; RLS protege los datos). */
   anonKey: z.string().default(''),
+  /** Correo de la cuenta Supabase conectada (autenticación por usuario). */
+  email: z.string().default(''),
   lastPullMs: z.number().int().default(0),
 })
 export type SyncSettings = z.infer<typeof syncSettingsSchema>
@@ -74,6 +76,9 @@ export const syncStatusSchema = z.object({
   configured: z.boolean(),
   url: z.string(),
   anonKeySet: z.boolean(),
+  /** Cuenta Supabase autenticada (las políticas RLS restringen por usuario). */
+  authenticated: z.boolean(),
+  email: z.string(),
   deviceId: z.string(),
   pending: z.number(),
   lastPullMs: z.number(),
@@ -94,6 +99,7 @@ export type SyncErrorCode =
   | 'ERR_SYNC_DISABLED'
   | 'ERR_SYNC_NETWORK'
   | 'ERR_SYNC_REMOTE'
+  | 'ERR_SYNC_AUTH'
 
 /** Error tipado del servicio de sincronización. */
 export class SyncError extends Error {

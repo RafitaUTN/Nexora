@@ -8,6 +8,7 @@ import {
   Link2,
   Plus,
   Sparkles,
+  TextQuote,
   Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -77,6 +78,25 @@ export function DocumentDetailPage(): JSX.Element {
       )
     },
     onError: (error: Error) => push({ kind: 'error', title: 'No se pudo clasificar', body: error.message }),
+  })
+
+  const summaryQuery = useQuery({
+    queryKey: queryKeys.summary(documentId),
+    queryFn: () => window.api.ai.summarize(documentId),
+    enabled: false,
+  })
+
+  const summarizeMutation = useMutation({
+    mutationFn: () => window.api.ai.summarize(documentId),
+    onSuccess: (result) => {
+      void queryClient.setQueryData(queryKeys.summary(documentId), result)
+      push(
+        result
+          ? { kind: 'success', title: 'Resumen generado', body: result.cached ? 'Desde la caché.' : 'Resumen listo.' }
+          : { kind: 'warning', title: 'Sin resumen', body: 'Revisa la configuración de IA.' },
+      )
+    },
+    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo resumir', body: error.message }),
   })
 
   const assignMutation = useMutation({
@@ -176,6 +196,10 @@ export function DocumentDetailPage(): JSX.Element {
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
+          <Button variant="outline" onClick={() => summarizeMutation.mutate()} disabled={summarizeMutation.isPending}>
+            {summarizeMutation.isPending ? <Spinner /> : <TextQuote />}
+            Resumir
+          </Button>
           <Button variant="outline" onClick={() => classifyMutation.mutate()} disabled={classifyMutation.isPending}>
             {classifyMutation.isPending ? <Spinner /> : <BrainCircuit />}
             Clasificar con IA
@@ -229,6 +253,55 @@ export function DocumentDetailPage(): JSX.Element {
           ) : (
             <p className="text-sm text-muted-foreground">
               Este documento aún no se ha clasificado. Usa «Clasificar con IA».
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-lg border bg-card">
+        <div className="flex items-center justify-between border-b p-4">
+          <div className="flex items-center gap-2">
+            <TextQuote className="size-4 text-primary" />
+            <h2 className="text-base font-semibold">Resumen</h2>
+            {summaryQuery.data ? (
+              <Badge tone={summaryQuery.data.cached ? 'neutral' : 'success'}>
+                {summaryQuery.data.cached ? 'Caché' : 'Nueva'}
+              </Badge>
+            ) : null}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => summarizeMutation.mutate()}
+            disabled={summarizeMutation.isPending}
+          >
+            {summarizeMutation.isPending ? <Spinner className="size-4" /> : <Sparkles className="size-4" />}
+            {summaryQuery.data ? 'Regenerar' : 'Generar resumen'}
+          </Button>
+        </div>
+        <div className="p-4">
+          {summarizeMutation.isPending && !summaryQuery.data ? (
+            <Skeleton className="h-24" />
+          ) : summaryQuery.data ? (
+            <div className="space-y-3">
+              <p className="text-sm leading-relaxed">{summaryQuery.data.summary}</p>
+              {summaryQuery.data.keyPoints.length > 0 ? (
+                <ul className="space-y-1.5">
+                  {summaryQuery.data.keyPoints.map((point, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm">
+                      <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" />
+                      {point}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <p className="text-xs text-muted-foreground">
+                {summaryQuery.data.provider} · {summaryQuery.data.model}
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Genera un resumen del documento con IA. No se guarda: la caché evita repetir coste.
             </p>
           )}
         </div>

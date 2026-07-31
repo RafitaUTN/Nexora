@@ -1,7 +1,7 @@
 import type { ProviderId } from '../entities/settings'
 
-/** Claves de SecretKind: proveedores de IA y la sesión persistida del usuario. */
-export type SecretKind = ProviderId | 'session'
+/** Claves de SecretKind: proveedores de IA, la sesión persistida y la sesión de sync. */
+export type SecretKind = ProviderId | 'session' | 'sync'
 
 /**
  * Almacén seguro de secretos. La implementación cifra con AES-256-GCM y

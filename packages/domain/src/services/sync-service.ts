@@ -34,6 +34,8 @@ export class SyncService {
       configured: settings.url.length > 0 && settings.anonKey.length > 0,
       url: settings.url,
       anonKeySet: settings.anonKey.length > 0,
+      authenticated: settings.email.length > 0,
+      email: settings.email,
     }
   }
 
@@ -43,9 +45,9 @@ export class SyncService {
     return this.status()
   }
 
-  async configure(url: string, anonKey: string): Promise<SyncStatus> {
+  async configure(url: string, anonKey: string, email = ''): Promise<SyncStatus> {
     const settings = await this.local.getSettings()
-    await this.local.saveSettings({ ...settings, url, anonKey })
+    await this.local.saveSettings({ ...settings, url, anonKey, email })
     return this.status()
   }
 

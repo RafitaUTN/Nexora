@@ -7,6 +7,7 @@ import type {
   DocumentSource,
   DocumentStats,
   DocumentSummary,
+  DocumentSummaryResult,
   HistoryEntry,
   License,
   LicenseKey,
@@ -15,6 +16,7 @@ import type {
   NewTag,
   PagedResult,
   PublicUser,
+  QaResult,
   RegisterUserInput,
   Role,
   SyncResult,
@@ -114,6 +116,8 @@ export interface DocuMindApi {
   }
   ai: {
     classify(documentId: number): Promise<Classification | null>
+    summarize(documentId: number): Promise<DocumentSummaryResult | null>
+    qa(question: string): Promise<QaResult>
     usage(): Promise<{
       totalCalls: number
       totalTokens: number
@@ -170,7 +174,14 @@ export interface DocuMindApi {
   sync: {
     status(): Promise<SyncStatus>
     setEnabled(enabled: boolean): Promise<SyncStatus>
-    configure(url: string, anonKey: string): Promise<SyncStatus>
+    configure(url: string, anonKey: string, email: string, password: string): Promise<SyncStatus>
+    signUp(
+      url: string,
+      anonKey: string,
+      email: string,
+      password: string,
+    ): Promise<{ ok: boolean; confirmationRequired: boolean; status: SyncStatus | null }>
+    signOut(): Promise<SyncStatus>
     run(): Promise<SyncResult>
     ping(): Promise<{ ok: boolean }>
   }

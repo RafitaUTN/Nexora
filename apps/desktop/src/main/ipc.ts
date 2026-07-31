@@ -273,6 +273,31 @@ export function registerIpc(context: IpcContext): void {
     return classification
   })
   handle(IpcChannel.AiUsage, async () => rt().repos.aiUsage.summarize())
+  handle(IpcChannel.AiSummarize, async (documentId: number) => {
+    requireRole('editor')
+    const result = await rt().summarizeService.summarize(Number(documentId))
+    if (result) {
+      await rt().auditService.record({
+        action: 'document.summarized',
+        entityType: 'document',
+        entityId: String(documentId),
+        detail: `${result.provider}/${result.model}${result.cached ? ' · caché' : ''}`,
+      })
+    }
+    return result
+  })
+  handle(IpcChannel.AiQa, async (question: string) => {
+    requireRole('editor')
+    const result = await rt().qaService.ask(String(question ?? ''), 5)
+    if (result.citations.length > 0) {
+      await rt().auditService.record({
+        action: 'ai.qa',
+        entityType: 'ai',
+        detail: `«${String(question ?? '').slice(0, 80)}» · ${result.citations.length} docs`,
+      })
+    }
+    return result
+  })
   handle(IpcChannel.AiHealth, async () => {
     const provider = await rt().getProvider()
     if (!provider) return { ok: false, latencyMs: 0, error: 'IA no configurada' }
@@ -491,14 +516,57 @@ export function registerIpc(context: IpcContext): void {
     })
     return status
   })
-  handle(IpcChannel.SyncConfigure, async (payload: { url?: unknown; anonKey?: unknown }) => {
+  handle(IpcChannel.SyncConfigure, async (payload: {
+    url?: unknown
+    anonKey?: unknown
+    email?: unknown
+    password?: unknown
+  }) => {
     requireRole('admin')
     const url = String(payload?.url ?? '').trim()
     const anonKey = String(payload?.anonKey ?? '').trim()
+    const email = String(payload?.email ?? '').trim()
+    const password = String(payload?.password ?? '')
     if (!url) throw new SyncError('URL del proyecto Supabase requerida', 'ERR_SYNC_NOT_CONFIGURED')
     if (!anonKey) throw new SyncError('Clave anon del proyecto requerida', 'ERR_SYNC_NOT_CONFIGURED')
-    const status = await rt().sync.configure(url, anonKey)
-    await rt().auditService.record({ action: 'sync.configure', detail: status.url })
+    if (!email || !password) {
+      throw new SyncError('Correo y contraseña de la cuenta Supabase requeridos', 'ERR_SYNC_AUTH')
+    }
+    const status = await rt().syncLogin(url, anonKey, email, password)
+    await rt().auditService.record({
+      action: 'sync.configure',
+      detail: `${status.url} · ${status.email}`,
+    })
+    return status
+  })
+  handle(IpcChannel.SyncSignUp, async (payload: {
+    url?: unknown
+    anonKey?: unknown
+    email?: unknown
+    password?: unknown
+  }) => {
+    requireRole('admin')
+    const url = String(payload?.url ?? '').trim()
+    const anonKey = String(payload?.anonKey ?? '').trim()
+    const email = String(payload?.email ?? '').trim()
+    const password = String(payload?.password ?? '')
+    if (!url || !anonKey) {
+      throw new SyncError('URL y clave anon del proyecto requeridas', 'ERR_SYNC_NOT_CONFIGURED')
+    }
+    if (!email || password.length < 8) {
+      throw new SyncError('El correo y una contraseña de al menos 8 caracteres son requeridos', 'ERR_SYNC_AUTH')
+    }
+    const result = await rt().syncSignUp(url, anonKey, email, password)
+    await rt().auditService.record({
+      action: result.confirmationRequired ? 'sync.signupPending' : 'sync.signup',
+      detail: email,
+    })
+    return result
+  })
+  handle(IpcChannel.SyncSignOut, async () => {
+    requireRole('admin')
+    const status = await rt().syncSignOut()
+    await rt().auditService.record({ action: 'sync.signout', detail: status.url })
     return status
   })
   handle(IpcChannel.SyncRun, async () => {
@@ -532,6 +600,7 @@ export function wireEvents(bus: EventBus, getWindow: () => BrowserWindow | null)
     bus.on('ai:progress', (p) => send(IpcEvent.EventAiProgress, p)),
     bus.on('notification', (p) => send(IpcEvent.EventNotification, p)),
     bus.on('automation:run', (p) => send(IpcEvent.EventAutomationRun, p)),
+    bus.on('sync:completed', (p) => send(IpcEvent.EventSyncStatus, p)),
   ]
   return () => subs.forEach((unsub) => unsub())
 }

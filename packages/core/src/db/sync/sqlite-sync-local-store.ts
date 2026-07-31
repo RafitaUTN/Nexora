@@ -47,17 +47,18 @@ export class SqliteSyncLocalStore implements SyncLocalStore {
     const row = this.db
       .prepare(`SELECT value FROM settings WHERE key = ?`)
       .get(SETTINGS_KEY) as { value: string } | undefined
-    if (!row) return { enabled: false, url: '', anonKey: '', lastPullMs: 0 }
+    if (!row) return { enabled: false, url: '', anonKey: '', email: '', lastPullMs: 0 }
     try {
       const parsed = JSON.parse(row.value) as Partial<SyncSettings>
       return {
         enabled: parsed.enabled ?? false,
         url: parsed.url ?? '',
         anonKey: parsed.anonKey ?? '',
+        email: parsed.email ?? '',
         lastPullMs: parsed.lastPullMs ?? 0,
       }
     } catch {
-      return { enabled: false, url: '', anonKey: '', lastPullMs: 0 }
+      return { enabled: false, url: '', anonKey: '', email: '', lastPullMs: 0 }
     }
   }
 
@@ -81,6 +82,8 @@ export class SqliteSyncLocalStore implements SyncLocalStore {
     const settings = await this.getSettings()
     return {
       enabled: settings.enabled,
+      authenticated: settings.email.length > 0,
+      email: settings.email,
       deviceId: this.deviceId,
       pending: row.n,
       lastPullMs: settings.lastPullMs,

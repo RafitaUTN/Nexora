@@ -10,7 +10,7 @@ Alcance: proteger los documentos del cliente (facturas, contratos, datos persona
 | Lectura no autorizada del renderer | `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false` (ADR-0009). El renderer solo ve estados, no valores de claves. |
 | Logs con secretos | Logger con redacción (`redact: ['apiKey','Authorization','key_cipher']`). |
 | Exfiltración vía IA | Nunca se envían documentos completos; solo fragmentos necesarios dentro de un presupuesto de tokens (ADR-0006). Configurable y documentado en `ai-strategy.md`. |
-| Sincronización (Supabase) | La app usa la `anonKey` publicable como única credencial (FASE 13). RLS **habilitada** en `sync_*` con políticas permisivas para `anon` (USING true / WITH CHECK true) que preservan el comportamiento actual; la separación real por usuario requiere Supabase Auth + políticas `auth.uid()` (post-MVP «colaboración»). El contenido sincronizado es el del propio usuario; no exponer la anonKey fuera del binario. |
+| Sincronización (Supabase) | Cada fila remota lleva `user_id` y las políticas RLS `sync_*_own` limitan lectura/escritura a `auth.uid()` (migración `rls_user_scoped_sync`); sin sesión las escrituras se rechazan. La sesión de Supabase Auth (`access_token`) se guarda **cifrada en el `SecretStore`** (AES-256-GCM), se refresca automáticamente y viaja solo como `Bearer` en las peticiones de sync. La `anonKey` es publicable por diseño; no exponerla fuera del binario. |
 
 ## 2. Integridad
 

@@ -106,11 +106,24 @@
 - E2E ampliado: abre el overlay con Ctrl+K, busca por contenido, selecciona y navega al detalle.
 
 ### FASE 13 — Sincronización entre dispositivos (Supabase/Postgres)
-- ADR-0013: LWW por `updatedAtMs`; outbox local llenado por triggers SQLite (migración 007 `sync_outbox` + `sync_meta`); borrados como tombstones; claves compuestas `entity:entityKey`; configuración en `settings` (`sync.settings`); `anonKey` publicable (RLS pendiente en el esquema remoto de desarrollo).
+- ADR-0013: LWW por `updatedAtMs`; outbox local llenado por triggers SQLite (migración 007 `sync_outbox` + `sync_meta`); borrados como tombstones; claves compuestas `entity:entityKey`; configuración en `settings` (`sync.settings`); `anonKey` publicable.
 - Dominio: `entities/sync`, `ports/sync` (`SyncLocalStore`/`SyncRemoteStore`), `SyncService` (`sync` idempotente, `ping`, `status`, `setEnabled`, `configure`).
 - Core: `SqliteSyncLocalStore`, `SupabaseSyncStore` (PostgREST con `fetch`); triggers AFTER INSERT/UPDATE/DELETE en documents/tags/document_tags (+ contents).
 - Integración: canales `sync:status|setEnabled|configure|run|ping` (viewer lectura, editor run, admin configure/setEnabled, con auditoría); UI «Sincronización» en Ajustes.
 - Verificación: 233 tests, cobertura 91.95/80.26/92.03/94; typecheck, lint, build y smoke OK.
 
+### FASE 13 — Resumen y Q&A (IA), auto-sync y autenticación
+- `SummarizeService` y `QaService` (dominio) con caché por hash, presupuesto de tokens y RAG por FTS5; canales `ai:summarize|ai:qa` (rol editor) y UI de resumen en el detalle + página `/qa`.
+- Auto-sync en segundo plano: primer disparo a los 5 s y luego cada 15 min (`sync:status` al renderer).
+- Supabase Auth: `SupabaseAuthClient` (login/refresh/signUp, GoTrue con `fetch`), sesión cifrada en `SecretStore`, `SupabaseSyncStore` autenticado con `user_id` por fila; canales `sync:signUp|signOut` y UI de cuenta en Ajustes.
+- RLS por `auth.uid()` en las 4 tablas remotas (migración `rls_user_scoped_sync`): columna `user_id` + políticas `sync_*_own`; se eliminan las permisivas `anon`.
+
+### FASE 14 — Release 1.0.0 (✅ tag `v1.0.0`)
+- Seguridad de release: credencial E2E extraída a entorno (`DOCUMIND_E2E_PASSWORD`) → `audit:code` limpio.
+- Versionado a `1.0.0` en todo el workspace (root, desktop, 6 paquetes, `package-lock.json`, `APP_VERSION`).
+- README raíz con features, requisitos, comandos y estructura; CHANGELOG cerrado como `[1.0.0] — 2026-07-31`.
+- Verificación completa: audit, audit:code, typecheck, lint, tests (251), cobertura ≥ umbrales, build, smoke y e2e.
+- Commit + tag `v1.0.0` que dispara `release.yml` (build/publish x3 OS + feed de actualizaciones).
+
 ## Post-MVP
-- Colaboración (políticas RLS por usuario), auto-sync en segundo plano, resolución de conflictos por campos.
+- Colaboración multiusuario (invitaciones a bibliotecas compartidas), resolución de conflictos por campos.

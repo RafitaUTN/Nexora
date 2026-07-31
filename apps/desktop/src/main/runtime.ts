@@ -17,13 +17,16 @@ import {
   ClassificationService,
   DocumentService,
   LicenseService,
+  QaService,
   SearchService,
   SettingsService,
+  SummarizeService,
   SyncService,
   TagService,
   SyncError,
   type SyncChange,
   type SyncRemoteStore,
+  type SyncStatus,
 } from '@documind/domain'
 import { createAIProvider } from '@documind/ai'
 import { ExtractionService } from '@documind/document'
@@ -54,7 +57,9 @@ import {
   SqliteTagRepository,
   SqliteUserRepository,
   SqliteSyncLocalStore,
+  SupabaseAuthClient,
   SupabaseSyncStore,
+  type SupabaseSession,
   randomHex,
   runMigrations,
   type Logger,
@@ -109,6 +114,8 @@ export interface AppRuntime {
   auditService: AuditService
   automationService: AutomationService
   classificationService: ClassificationService
+  summarizeService: SummarizeService
+  qaService: QaService
   auth: SessionManager
   license: LicenseService
   sync: SyncService
@@ -127,6 +134,17 @@ export interface AppRuntime {
   scanPath(path: string, filename: string, sourceId: number | null): Promise<boolean>
   rescanAll(): Promise<ScanResult>
   restoreBackup(name: string): Promise<void>
+  /** Conecta la cuenta Supabase (email/contraseña) para la sincronización. */
+  syncLogin(url: string, anonKey: string, email: string, password: string): Promise<SyncStatus>
+  /** Crea una cuenta Supabase y, si no requiere confirmación, la conecta. */
+  syncSignUp(
+    url: string,
+    anonKey: string,
+    email: string,
+    password: string,
+  ): Promise<{ ok: boolean; confirmationRequired: boolean; status: SyncStatus | null }>
+  /** Desconecta la cuenta Supabase (borra la sesión cifrada y el correo). */
+  syncSignOut(): Promise<SyncStatus>
   dispose(): Promise<void>
 }
 
@@ -134,6 +152,9 @@ const DB_FILE = 'documind.db'
 const BACKUPS_DIR = 'backups'
 const DEVICE_ID_FILE = 'device.id'
 const DEFAULT_LICENSE_URL = 'https://licenses.example.invalid'
+/** Auto-sync: primera ejecución y periodicidad en segundo plano. */
+const AUTO_SYNC_INITIAL_MS = 5_000
+const AUTO_SYNC_INTERVAL_MS = 15 * 60 * 1_000
 
 export function dbPathOf(userDataPath: string): string {
   return join(userDataPath, DB_FILE)
@@ -228,47 +249,88 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
   )
 
   // Sincronización: el store remoto se reconstruye con la configuración
-  // vigente en cada operación (configure() persiste en el store local).
+  // vigente en cada operación (configure() persiste en el store local). Las
+  // peticiones se autentican como usuario de Supabase Auth (JWT) para que
+  // RLS restringa los datos por `user_id`; la sesión vive cifrada en el
+  // SecretStore y se renueva automáticamente al caducar.
   const syncLocal = new SqliteSyncLocalStore(db, deviceId)
+
+  const getSupabaseSession = async (): Promise<SupabaseSession> => {
+    const settings = await syncLocal.getSettings()
+    if (!settings.url || !settings.anonKey) {
+      throw new SyncError('Sincronización no configurada', 'ERR_SYNC_NOT_CONFIGURED')
+    }
+    if (!settings.email) {
+      throw new SyncError('Cuenta Supabase no conectada', 'ERR_SYNC_AUTH')
+    }
+    const raw = await secretStore.get('sync')
+    if (!raw) {
+      throw new SyncError('Sesión de Supabase no disponible', 'ERR_SYNC_AUTH')
+    }
+    let session: SupabaseSession
+    try {
+      session = JSON.parse(raw) as SupabaseSession
+    } catch {
+      throw new SyncError('Sesión de Supabase corrupta', 'ERR_SYNC_AUTH')
+    }
+    if (session.expiresAt <= Date.now() + 60_000) {
+      const client = new SupabaseAuthClient({ url: settings.url, anonKey: settings.anonKey })
+      session = await client.refresh(session.refreshToken)
+      await secretStore.set('sync', JSON.stringify(session))
+    }
+    return session
+  }
+
+  const remoteStore = async (): Promise<SupabaseSyncStore> => {
+    const settings = await syncLocal.getSettings()
+    const session = await getSupabaseSession()
+    return new SupabaseSyncStore({
+      url: settings.url,
+      anonKey: settings.anonKey,
+      deviceId,
+      accessToken: session.accessToken,
+      userId: session.userId,
+    })
+  }
+
   const syncRemote: SyncRemoteStore = {
     async push(changes: SyncChange[]): Promise<void> {
-      const settings = await syncLocal.getSettings()
-      if (!settings.url || !settings.anonKey) {
-        throw new SyncError('Sincronización no configurada', 'ERR_SYNC_NOT_CONFIGURED')
-      }
-      const store = new SupabaseSyncStore({
-        url: settings.url,
-        anonKey: settings.anonKey,
-        deviceId,
-      })
-      await store.push(changes)
+      await (await remoteStore()).push(changes)
     },
     async pull(sinceMs: number): Promise<SyncChange[]> {
-      const settings = await syncLocal.getSettings()
-      if (!settings.url || !settings.anonKey) {
-        throw new SyncError('Sincronización no configurada', 'ERR_SYNC_NOT_CONFIGURED')
-      }
-      const store = new SupabaseSyncStore({
-        url: settings.url,
-        anonKey: settings.anonKey,
-        deviceId,
-      })
-      return store.pull(sinceMs)
+      return (await remoteStore()).pull(sinceMs)
     },
     async ping(): Promise<void> {
-      const settings = await syncLocal.getSettings()
-      if (!settings.url || !settings.anonKey) {
-        throw new SyncError('Sincronización no configurada', 'ERR_SYNC_NOT_CONFIGURED')
-      }
-      const store = new SupabaseSyncStore({
-        url: settings.url,
-        anonKey: settings.anonKey,
-        deviceId,
-      })
-      await store.ping()
+      await (await remoteStore()).ping()
     },
   }
   const sync = new SyncService(syncLocal, syncRemote)
+
+  // Auto-sync en segundo plano: sincroniza periódicamente si está habilitada,
+  // sin bloquear otras operaciones. No lanza: solo registra el resultado.
+  let autoSyncRunning = false
+  const runAutoSync = async (): Promise<void> => {
+    if (autoSyncRunning) return
+    autoSyncRunning = true
+    try {
+      const settings = await syncLocal.getSettings()
+      if (!settings.enabled || !settings.url || !settings.anonKey) return
+      const result = await sync.sync()
+      bus.emit('sync:completed', result)
+      logger.info('Auto-sync completado', { ...result })
+    } catch (error) {
+      logger.warn('Auto-sync falló', { error: String(error) })
+    } finally {
+      autoSyncRunning = false
+    }
+  }
+  const autoSyncTimer = setTimeout(() => {
+    void runAutoSync()
+  }, AUTO_SYNC_INITIAL_MS)
+  const autoSyncInterval = setInterval(() => {
+    void runAutoSync()
+  }, AUTO_SYNC_INTERVAL_MS)
+  autoSyncInterval.unref?.()
 
   const ocrEngine =
     options.ocrEngine !== undefined
@@ -287,6 +349,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
   }
 
   let classificationService!: ClassificationService
+  let summarizeService!: SummarizeService
+  let qaService!: QaService
   let indexing!: IndexingService
   const buildIndexing = async (): Promise<void> => {
     const ai = await getProvider()
@@ -294,6 +358,23 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
       ai,
       documents: repositories.documents,
       classifications: repositories.classifications,
+      cache: repositories.aiCache,
+      usage: repositories.aiUsage,
+      bus,
+      settings: () => settingsCache,
+    })
+    summarizeService = new SummarizeService({
+      ai,
+      documents: repositories.documents,
+      cache: repositories.aiCache,
+      usage: repositories.aiUsage,
+      bus,
+      settings: () => settingsCache,
+    })
+    qaService = new QaService({
+      ai,
+      documents: repositories.documents,
+      search: repositories.search,
       cache: repositories.aiCache,
       usage: repositories.aiUsage,
       bus,
@@ -420,6 +501,12 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
     get classificationService(): ClassificationService {
       return classificationService
     },
+    get summarizeService(): SummarizeService {
+      return summarizeService
+    },
+    get qaService(): QaService {
+      return qaService
+    },
     get indexing(): IndexingService {
       return indexing
     },
@@ -506,7 +593,32 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
       await runtime.dispose()
       await backups.restore(name, dbPathOf(userDataPath))
     },
+    async syncLogin(url, anonKey, email, password): Promise<SyncStatus> {
+      const cleanUrl = url.trim().replace(/\/+$/, '')
+      const client = new SupabaseAuthClient({ url: cleanUrl, anonKey: anonKey.trim() })
+      const session = await client.login(email.trim(), password)
+      await secretStore.set('sync', JSON.stringify(session))
+      return sync.configure(cleanUrl, anonKey.trim(), email.trim())
+    },
+    async syncSignUp(url, anonKey, email, password) {
+      const cleanUrl = url.trim().replace(/\/+$/, '')
+      const client = new SupabaseAuthClient({ url: cleanUrl, anonKey: anonKey.trim() })
+      const result = await client.signUp(email.trim(), password)
+      if (!result.confirmationRequired && result.session) {
+        await secretStore.set('sync', JSON.stringify(result.session))
+        const status = await sync.configure(cleanUrl, anonKey.trim(), email.trim())
+        return { ok: true, confirmationRequired: false, status }
+      }
+      return { ok: true, confirmationRequired: true, status: null }
+    },
+    async syncSignOut(): Promise<SyncStatus> {
+      await secretStore.delete('sync')
+      const settings = await syncLocal.getSettings()
+      return sync.configure(settings.url, settings.anonKey, '')
+    },
     async dispose(): Promise<void> {
+      clearTimeout(autoSyncTimer)
+      clearInterval(autoSyncInterval)
       watcher.close()
       await ocrEngine?.dispose?.()
       db.checkpoint()

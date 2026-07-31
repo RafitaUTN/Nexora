@@ -1,6 +1,7 @@
 export const queryKeys = {
   documents: ['documents'] as const,
   document: (id: number) => ['documents', id] as const,
+  summary: (id: number) => ['documents', id, 'summary'] as const,
   stats: ['stats'] as const,
   sources: ['sources'] as const,
   tags: ['tags'] as const,

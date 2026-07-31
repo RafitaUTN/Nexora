@@ -54,6 +54,8 @@ const api: DocuMindApi = {
 
   ai: {
     classify: (documentId) => invoke(IpcChannel.AiClassify, documentId),
+    summarize: (documentId) => invoke(IpcChannel.AiSummarize, documentId),
+    qa: (question) => invoke(IpcChannel.AiQa, question),
     usage: () => invoke(IpcChannel.AiUsage),
     health: () => invoke(IpcChannel.AiHealth),
     setApiKey: (provider, apiKey) => invoke(IpcChannel.AiSetApiKey, { provider, apiKey }),
@@ -115,7 +117,11 @@ const api: DocuMindApi = {
   sync: {
     status: () => invoke(IpcChannel.SyncStatus),
     setEnabled: (enabled) => invoke(IpcChannel.SyncSetEnabled, enabled),
-    configure: (url, anonKey) => invoke(IpcChannel.SyncConfigure, { url, anonKey }),
+    configure: (url, anonKey, email, password) =>
+      invoke(IpcChannel.SyncConfigure, { url, anonKey, email, password }),
+    signUp: (url, anonKey, email, password) =>
+      invoke(IpcChannel.SyncSignUp, { url, anonKey, email, password }),
+    signOut: () => invoke(IpcChannel.SyncSignOut),
     run: () => invoke(IpcChannel.SyncRun),
     ping: () => invoke(IpcChannel.SyncPing),
   },

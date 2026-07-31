@@ -37,6 +37,8 @@ export const IpcChannel = {
 
   // AI
   AiClassify: 'ai:classify',
+  AiSummarize: 'ai:summarize',
+  AiQa: 'ai:qa',
   AiUsage: 'ai:usage',
   AiHealth: 'ai:health',
   AiSetApiKey: 'ai:setApiKey',
@@ -89,6 +91,8 @@ export const IpcChannel = {
   SyncStatus: 'sync:status',
   SyncSetEnabled: 'sync:setEnabled',
   SyncConfigure: 'sync:configure',
+  SyncSignUp: 'sync:signUp',
+  SyncSignOut: 'sync:signOut',
   SyncRun: 'sync:run',
   SyncPing: 'sync:ping',
 } as const
@@ -108,6 +112,7 @@ export const IpcEvent = {
   EventUpdateStatus: 'event:update:status',
   EventAutomationRun: 'event:automation:run',
   EventGlobalSearch: 'event:globalSearch',
+  EventSyncStatus: 'event:sync:status',
 } as const
 
 export type IpcEvent = (typeof IpcEvent)[keyof typeof IpcEvent]

@@ -8,6 +8,13 @@ export interface SupabaseSyncStoreConfig {
   anonKey: string
   /** Identificador de instalación; sus filas se excluyen en el pull. */
   deviceId: string
+  /**
+   * Token de acceso del usuario autenticado (JWT de Supabase Auth). Si falta,
+   * las peticiones van como anónimas y RLS las rechaza en las tablas de datos.
+   */
+  accessToken?: string
+  /** `sub` del token: se escribe en la columna `user_id` para las políticas RLS. */
+  userId?: string
   fetchImpl?: typeof fetch
 }
 
@@ -43,9 +50,10 @@ export class SupabaseSyncStore implements SyncRemoteStore {
   }
 
   private headers(): Record<string, string> {
+    const token = this.config.accessToken ?? this.config.anonKey
     return {
       apikey: this.config.anonKey,
-      Authorization: `Bearer ${this.config.anonKey}`,
+      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     }
   }
@@ -101,6 +109,7 @@ export class SupabaseSyncStore implements SyncRemoteStore {
     const key = Number(change.entityKey.split(':')[0])
     const base: RestRow = {
       device_id: this.config.deviceId,
+      user_id: this.config.userId ?? null,
       updated_at_ms: change.updatedAtMs,
     }
     if (change.op === 'delete') {

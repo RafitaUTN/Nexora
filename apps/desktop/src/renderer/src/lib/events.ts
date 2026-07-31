@@ -21,6 +21,9 @@ export function useAppEvents(): void {
       window.api.on(IpcEvent.EventDocumentIndexed, () => invalidateDocuments()),
       window.api.on(IpcEvent.EventDocumentStatus, () => invalidateDocuments()),
       window.api.on(IpcEvent.EventIndexProgress, () => invalidateDocuments()),
+      window.api.on(IpcEvent.EventSyncStatus, () => {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sync })
+      }),
     ]
     return () => {
       subs.forEach((unsubscribe) => unsubscribe())

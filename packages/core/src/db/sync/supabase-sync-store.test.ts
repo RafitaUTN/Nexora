@@ -96,6 +96,7 @@ describe('SupabaseSyncStore', () => {
       updated_at_ms: 500,
       local_id: 9,
       deleted_at_ms: 500,
+      user_id: null,
     })
   })
 
@@ -114,6 +115,28 @@ describe('SupabaseSyncStore', () => {
     expect(call?.url).toContain('on_conflict=device_id,document_id,tag_id')
     const body = JSON.parse(String(call?.init.body)) as Record<string, unknown>[]
     expect(body[0]).toMatchObject({ document_id: 4, tag_id: 7 })
+  })
+
+  it('push de tombstone de asignación mapea document_id/tag_id', async () => {
+    const { store, calls } = mockFetch(() => [])
+    const change: SyncChange = {
+      entity: 'assignment',
+      entityKey: '4:7',
+      op: 'delete',
+      updatedAtMs: 300,
+      deviceId: 'device-1',
+    }
+    await store.push([change])
+    const call = calls.find((c) => c.url.includes('sync_document_tags'))
+    const body = JSON.parse(String(call?.init.body)) as Record<string, unknown>[]
+    expect(body[0]).toEqual({
+      device_id: 'device-1',
+      user_id: null,
+      updated_at_ms: 300,
+      document_id: 4,
+      tag_id: 7,
+      deleted_at_ms: 300,
+    })
   })
 
   it('pull trae cambios posteriores a sinceMs excluyendo el propio dispositivo', async () => {

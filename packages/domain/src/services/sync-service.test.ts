@@ -9,7 +9,13 @@ import { SyncService, keyOf } from './sync-service'
 
 class FakeLocalStore implements SyncLocalStore {
   pendingChanges: SyncChange[] = []
-  settings: SyncSettings = { enabled: true, url: 'https://db.example.supabase.co', anonKey: 'anon-123', lastPullMs: 0 }
+  settings: SyncSettings = {
+    enabled: true,
+    url: 'https://db.example.supabase.co',
+    anonKey: 'anon-123',
+    email: 'admin@documind.local',
+    lastPullMs: 0,
+  }
   deviceId = 'device-1'
   syncedKeys: string[] = []
   applied: SyncChange[] = []
@@ -41,7 +47,14 @@ class FakeLocalStore implements SyncLocalStore {
     return this.deviceId
   }
   async status(): Promise<Omit<SyncStatus, 'url' | 'configured' | 'anonKeySet'>> {
-    return { enabled: this.settings.enabled, deviceId: this.deviceId, pending: this.pendingChanges.length, lastPullMs: this.lastPullMs }
+    return {
+      enabled: this.settings.enabled,
+      authenticated: this.settings.email.length > 0,
+      email: this.settings.email,
+      deviceId: this.deviceId,
+      pending: this.pendingChanges.length,
+      lastPullMs: this.lastPullMs,
+    }
   }
 }
 

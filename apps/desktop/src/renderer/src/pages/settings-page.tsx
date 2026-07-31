@@ -322,6 +322,8 @@ function SyncSection(): JSX.Element {
   const isAdmin = currentUser?.role === 'admin'
   const [url, setUrl] = useState('')
   const [anonKey, setAnonKey] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
 
   const sync = useQuery({ queryKey: queryKeys.sync, queryFn: () => window.api.sync.status() })
 
@@ -336,15 +338,45 @@ function SyncSection(): JSX.Element {
   })
 
   const configureMutation = useMutation({
-    mutationFn: () => window.api.sync.configure(url.trim(), anonKey.trim()),
+    mutationFn: () => window.api.sync.configure(url.trim(), anonKey.trim(), email.trim(), password),
     onSuccess: (status) => {
       void queryClient.setQueryData<SyncStatus>(queryKeys.sync, status)
       setUrl('')
       setAnonKey('')
-      push({ kind: 'success', title: 'Servidor de sincronización configurado' })
+      setEmail('')
+      setPassword('')
+      push({ kind: 'success', title: 'Cuenta conectada', body: `Sincronizando como ${status.email}` })
     },
     onError: (error: Error) =>
-      push({ kind: 'error', title: 'No se pudo configurar', body: error.message }),
+      push({ kind: 'error', title: 'No se pudo conectar', body: error.message }),
+  })
+
+  const signUpMutation = useMutation({
+    mutationFn: () => window.api.sync.signUp(url.trim(), anonKey.trim(), email.trim(), password),
+    onSuccess: (result) => {
+      if (result.status) void queryClient.setQueryData<SyncStatus>(queryKeys.sync, result.status)
+      push(
+        result.confirmationRequired
+          ? {
+              kind: 'info',
+              title: 'Confirmación de correo pendiente',
+              body: 'Confirma el correo en Supabase y luego conecta la cuenta aquí.',
+            }
+          : { kind: 'success', title: 'Cuenta creada y conectada' },
+      )
+    },
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo crear la cuenta', body: error.message }),
+  })
+
+  const signOutMutation = useMutation({
+    mutationFn: () => window.api.sync.signOut(),
+    onSuccess: (status) => {
+      void queryClient.setQueryData<SyncStatus>(queryKeys.sync, status)
+      push({ kind: 'success', title: 'Cuenta desconectada' })
+    },
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo desconectar', body: error.message }),
   })
 
   const pingMutation = useMutation({
@@ -370,6 +402,7 @@ function SyncSection(): JSX.Element {
 
   const status = sync.data
   const configured = status?.configured ?? false
+  const authenticated = status?.authenticated ?? false
 
   return (
     <div className="space-y-4 p-4">
@@ -381,6 +414,11 @@ function SyncSection(): JSX.Element {
           <Badge tone={configured ? 'info' : 'neutral'}>
             {configured ? 'Configurada' : 'Sin configurar'}
           </Badge>
+          {authenticated ? (
+            <Badge tone="success">Cuenta: {status?.email}</Badge>
+          ) : configured ? (
+            <Badge tone="warning">Sin cuenta conectada</Badge>
+          ) : null}
           {status?.deviceId ? (
             <p className="text-xs text-muted-foreground">Dispositivo {status.deviceId.slice(0, 8)}</p>
           ) : null}
@@ -403,6 +441,17 @@ function SyncSection(): JSX.Element {
             {runMutation.isPending ? <Spinner /> : <RefreshCw />}
             Sincronizar ahora
           </Button>
+          {authenticated ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => signOutMutation.mutate()}
+              disabled={signOutMutation.isPending}
+            >
+              {signOutMutation.isPending ? <Spinner /> : <LogOut />}
+              Desconectar
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -435,16 +484,68 @@ function SyncSection(): JSX.Element {
                 disabled={configureMutation.isPending}
               />
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-0 flex-1 basis-56 space-y-1.5">
+              <Label htmlFor="sync-email">Correo de la cuenta Supabase</Label>
+              <Input
+                id="sync-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="usuario@ejemplo.com"
+                disabled={configureMutation.isPending || signUpMutation.isPending}
+              />
+            </div>
+            <div className="min-w-0 flex-1 basis-56 space-y-1.5">
+              <Label htmlFor="sync-password">Contraseña</Label>
+              <Input
+                id="sync-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                disabled={configureMutation.isPending || signUpMutation.isPending}
+              />
+            </div>
             <Button
               variant="outline"
               size="sm"
               onClick={() => configureMutation.mutate()}
-              disabled={!url.trim() || !anonKey.trim() || configureMutation.isPending}
+              disabled={
+                !url.trim() ||
+                !anonKey.trim() ||
+                !email.trim() ||
+                !password ||
+                configureMutation.isPending ||
+                signUpMutation.isPending
+              }
             >
               {configureMutation.isPending ? <Spinner /> : <Cloud />}
-              Guardar servidor
+              Conectar cuenta
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => signUpMutation.mutate()}
+              disabled={
+                !url.trim() ||
+                !anonKey.trim() ||
+                !email.trim() ||
+                password.length < 8 ||
+                configureMutation.isPending ||
+                signUpMutation.isPending
+              }
+            >
+              {signUpMutation.isPending ? <Spinner /> : <KeyRound />}
+              Crear cuenta
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            La contraseña se usa una sola vez para obtener la sesión de Supabase; solo se guarda el
+            token cifrado en este dispositivo.
+          </p>
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium">Sincronización activa</p>

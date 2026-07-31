@@ -7,6 +7,7 @@ import { DocumentDetailPage } from '@/pages/document-detail-page'
 import { SourcesPage } from '@/pages/sources-page'
 import { TagsPage } from '@/pages/tags-page'
 import { UsersPage } from '@/pages/users-page'
+import { QaPage } from '@/pages/qa-page'
 import { SettingsPage } from '@/pages/settings-page'
 import { BackupsPage } from '@/pages/backups-page'
 import { AutomationsPage } from '@/pages/automations-page'
@@ -22,6 +23,7 @@ export default function App(): JSX.Element {
           <Route path="documents/:id" element={<DocumentDetailPage />} />
           <Route path="sources" element={<SourcesPage />} />
           <Route path="tags" element={<TagsPage />} />
+          <Route path="qa" element={<QaPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="automations" element={<AutomationsPage />} />
           <Route path="history" element={<HistoryPage />} />

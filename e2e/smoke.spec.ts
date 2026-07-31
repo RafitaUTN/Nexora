@@ -24,6 +24,9 @@ interface AuthApi {
   login(username: string, password: string): Promise<unknown>
 }
 
+/** Credencial de la cuenta admin del test; configurable para evitar literales en el código. */
+const E2E_PASSWORD = process.env['DOCUMIND_E2E_PASSWORD'] ?? 'E2E-password-123'
+
 /** Crea una carpeta temporal con un documento de texto indexable. */
 function makeFixture(): { dir: string; filename: string } {
   const dir = mkdtempSync(join(tmpdir(), 'documind-e2e-'))
@@ -52,11 +55,11 @@ test('smoke: abrir la app, escanear una carpeta y buscar', async () => {
       const api = (window as unknown as { api: { auth: AuthApi } }).api
       return typeof api?.auth?.setup === 'function'
     })
-    await page.evaluate(async () => {
+    await page.evaluate(async (password) => {
       const auth = (window as unknown as { api: { auth: AuthApi } }).api.auth
-      await auth.setup({ username: 'e2e', password: 'E2E-password-123', displayName: 'E2E', role: 'admin' })
-      await auth.login('e2e', 'E2E-password-123')
-    })
+      await auth.setup({ username: 'e2e', password, displayName: 'E2E', role: 'admin' })
+      await auth.login('e2e', password)
+    }, E2E_PASSWORD)
     await page.reload()
 
     // La app arranca en el Dashboard con la barra lateral visible.

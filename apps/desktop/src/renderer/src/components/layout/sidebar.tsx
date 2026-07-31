@@ -7,6 +7,7 @@ import {
   HardDriveDownload,
   History,
   LayoutDashboard,
+  MessageCircleQuestion,
   Settings,
   Sparkles,
   Tag,
@@ -19,6 +20,7 @@ import { useAuth } from '@/store/auth'
 const navigation = [
   { to: '/', label: 'Inicio', icon: LayoutDashboard, end: true },
   { to: '/documents', label: 'Documentos', icon: FileText, end: false },
+  { to: '/qa', label: 'Preguntar', icon: MessageCircleQuestion, end: false },
   { to: '/sources', label: 'Fuentes', icon: FolderInput, end: false },
   { to: '/tags', label: 'Etiquetas', icon: Tag, end: false },
   { to: '/automations', label: 'Automatizaciones', icon: Bot, end: false },

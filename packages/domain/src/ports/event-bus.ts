@@ -9,6 +9,7 @@ export interface EventMap {
   'ocr:progress': { processed: number; total: number }
   'ai:progress': { task: string; processed: number; total: number }
   'automation:run': { automationId: number; documentId: number; ok: boolean }
+  'sync:completed': { pushed: number; pulled: number; applied: number; skipped: number }
   notification: {
     level: 'info' | 'success' | 'warning' | 'error'
     title: string

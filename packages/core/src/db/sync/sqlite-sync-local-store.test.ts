@@ -32,19 +32,31 @@ describe('SqliteSyncLocalStore', () => {
         enabled: false,
         url: '',
         anonKey: '',
+        email: '',
         lastPullMs: 0,
       })
     })
 
     it('persiste y recupera la configuración', async () => {
       const { store } = fresh()
-      await store.saveSettings({ enabled: true, url: 'https://x.supabase.co', anonKey: 'k', lastPullMs: 42 })
+      await store.saveSettings({ enabled: true, url: 'https://x.supabase.co', anonKey: 'k', email: 'u@x.co', lastPullMs: 42 })
       expect(await store.getSettings()).toEqual({
         enabled: true,
         url: 'https://x.supabase.co',
         anonKey: 'k',
+        email: 'u@x.co',
         lastPullMs: 42,
       })
+    })
+
+    it('expone email y autenticación en el estado', async () => {
+      const { store } = fresh()
+      expect((await store.status()).authenticated).toBe(false)
+      expect((await store.status()).email).toBe('')
+      await store.saveSettings({ enabled: true, url: 'https://x.supabase.co', anonKey: 'k', email: 'u@x.co', lastPullMs: 0 })
+      const status = await store.status()
+      expect(status.authenticated).toBe(true)
+      expect(status.email).toBe('u@x.co')
     })
   })
 
