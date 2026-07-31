@@ -268,6 +268,31 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 5,
+    name: 'users_sessions',
+    up: `
+      CREATE TABLE IF NOT EXISTS users (
+        id            INTEGER PRIMARY KEY,
+        username      TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        display_name  TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        role          TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin','editor','viewer')),
+        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS sessions (
+        id           INTEGER PRIMARY KEY,
+        user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash   TEXT NOT NULL UNIQUE,
+        expires_at   TEXT NOT NULL,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        last_seen_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+    `,
+  },
 ]
 
 export function runMigrations(db: SqliteDatabase, list: Migration[] = migrations): void {

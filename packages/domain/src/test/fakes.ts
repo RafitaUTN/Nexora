@@ -18,7 +18,11 @@ import type { Classification, ExtractedEntity } from '../entities/classification
 import type { Document, DocumentFilter, DocumentStats, DocumentSummary, NewDocument, PagedResult } from '../entities/document'
 import type { NewTag, Tag, TagStats } from '../entities/tag'
 import type { AppSettings } from '../entities/settings'
+import type { NewUser, Role, User } from '../entities/user'
 import type { EventBus, EventMap, EventName } from '../ports/event-bus'
+import type { PasswordHasher } from '../ports/password-hasher'
+import type { SessionRepository, UserRepository } from '../ports/repositories'
+import type { SessionTokenService } from '../ports/session-token'
 
 export class FakeEventBus implements EventBus {
   readonly emitted: { event: EventName; payload: unknown }[] = []
@@ -381,8 +385,7 @@ export function makeDocumentSummary(overrides: Partial<Document> = {}): Document
   }
 }
 
-export function makeSettings(overrides: Partial<AppSettings> = {}): AppSettings {
-  return {
+export function makeSettings(overrides: Partial<AppSettings> = {}): AppSettings {  return {
     theme: 'system',
     language: 'es',
     ocrLanguages: ['spa', 'eng'],
@@ -403,5 +406,115 @@ export function makeSettings(overrides: Partial<AppSettings> = {}): AppSettings 
     },
     telemetry: false,
     ...overrides,
+  }
+}
+
+export class FakePasswordHasher implements PasswordHasher {
+  readonly hashed = new Map<string, string>()
+
+  async hash(password: string): Promise<string> {
+    const encoded = `$fake$${password}`
+    this.hashed.set(encoded, password)
+    return encoded
+  }
+
+  async verify(password: string, encoded: string): Promise<boolean> {
+    return this.hashed.get(encoded) === password
+  }
+}
+
+export class FakeSessionTokenService implements SessionTokenService {
+  readonly issued: string[] = []
+  private counter = 0
+
+  createToken(): string {
+    const token = `tok_${++this.counter}_${Math.random().toString(36).slice(2)}`
+    this.issued.push(token)
+    return token
+  }
+
+  hashToken(token: string): string {
+    return `hash(${token})`
+  }
+}
+
+export class FakeUserRepository implements UserRepository {
+  users: User[] = []
+  private nextId = 1
+
+  async create(user: Omit<NewUser, 'password'> & { passwordHash: string }): Promise<User> {
+    const now = new Date().toISOString()
+    const created: User = {
+      id: this.nextId++,
+      username: user.username,
+      displayName: user.displayName,
+      passwordHash: user.passwordHash,
+      role: user.role,
+      createdAt: now,
+      updatedAt: now,
+    }
+    this.users.push(created)
+    return created
+  }
+
+  async findByUsername(username: string): Promise<User | null> {
+    return this.users.find((u) => u.username.toLowerCase() === username.toLowerCase()) ?? null
+  }
+
+  async findById(id: number): Promise<User | null> {
+    return this.users.find((u) => u.id === id) ?? null
+  }
+
+  async list(): Promise<User[]> {
+    return [...this.users]
+  }
+
+  async count(): Promise<number> {
+    return this.users.length
+  }
+
+  async updateRole(id: number, role: Role): Promise<void> {
+    const found = this.users.find((u) => u.id === id)
+    if (found) found.role = role
+  }
+
+  async updatePassword(id: number, passwordHash: string): Promise<void> {
+    const found = this.users.find((u) => u.id === id)
+    if (found) found.passwordHash = passwordHash
+  }
+
+  async delete(id: number): Promise<void> {
+    this.users = this.users.filter((u) => u.id !== id)
+  }
+}
+
+export class FakeSessionRepository implements SessionRepository {
+  sessions: { userId: number; tokenHash: string; expiresAt: string }[] = []
+
+  async create(session: { userId: number; tokenHash: string; expiresAt: string }): Promise<void> {
+    this.sessions.push(session)
+  }
+
+  async findByTokenHash(tokenHash: string): Promise<{ userId: number; expiresAt: string } | null> {
+    const found = this.sessions.find((s) => s.tokenHash === tokenHash)
+    return found ? { userId: found.userId, expiresAt: found.expiresAt } : null
+  }
+
+  async touch(tokenHash: string): Promise<void> {
+    const found = this.sessions.find((s) => s.tokenHash === tokenHash)
+    if (found) found.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  }
+
+  async deleteByTokenHash(tokenHash: string): Promise<void> {
+    this.sessions = this.sessions.filter((s) => s.tokenHash !== tokenHash)
+  }
+
+  async deleteByUser(userId: number): Promise<void> {
+    this.sessions = this.sessions.filter((s) => s.userId !== userId)
+  }
+
+  async deleteExpired(): Promise<void> {
+    const now = Date.now()
+    this.sessions = this.sessions.filter((s) => new Date(s.expiresAt).getTime() >= now)
   }
 }

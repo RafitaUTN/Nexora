@@ -14,6 +14,8 @@ import { SqliteSourceRepository } from './repositories/sqlite-source-repository'
 import { SqliteClassificationRepository } from './repositories/sqlite-classification-repository'
 import { SqliteOcrQueueRepository } from './repositories/sqlite-ocr-queue-repository'
 import { SqliteAiCacheRepository, SqliteAiUsageRepository } from './repositories/sqlite-ai-repositories'
+import { SqliteUserRepository } from './repositories/sqlite-user-repository'
+import { SqliteSessionRepository } from './repositories/sqlite-session-repository'
 import { SqliteSecretStore } from '../secrets/sqlite-secret-store'
 import { AesGcm } from '../crypto/aes'
 
@@ -434,5 +436,91 @@ describe('integración SQLite', () => {
     const afterDelete = await docs.list({})
     expect(afterDelete.items.find((d) => d.id === a.id)).toBeUndefined()
     expect((await docs.findById(a.id))?.deletedAt).not.toBeNull()
+  })
+
+  it('users repo: crear, buscar por username (case-insensitive) y actualizar', async () => {
+    const db = freshDb()
+    const users = new SqliteUserRepository(db)
+    const user = await users.create({
+      username: 'Boss',
+      displayName: 'La Jefa',
+      role: 'admin',
+      passwordHash: 'ph-1',
+    })
+    expect(user.id).toBeGreaterThan(0)
+    expect((await users.findByUsername('boss'))?.displayName).toBe('La Jefa')
+    expect((await users.findById(user.id))?.role).toBe('admin')
+    expect(await users.count()).toBe(1)
+
+    await users.updateRole(user.id, 'editor')
+    expect((await users.findById(user.id))?.role).toBe('editor')
+    await users.updatePassword(user.id, 'ph-2')
+    expect((await users.findById(user.id))?.passwordHash).toBe('ph-2')
+
+    const listed = await users.list()
+    expect(listed.map((u) => u.username)).toEqual(['Boss'])
+  })
+
+  it('sessions repo: ciclo de vida completo', async () => {
+    const db = freshDb()
+    const users = new SqliteUserRepository(db)
+    const sessions = new SqliteSessionRepository(db)
+    const user = await users.create({
+      username: 'sess',
+      displayName: 'Sess',
+      role: 'viewer',
+      passwordHash: 'ph',
+    })
+    const expires = new Date(Date.now() + 60_000).toISOString()
+    await sessions.create({ userId: user.id, tokenHash: 'th-1', expiresAt: expires })
+    expect((await sessions.findByTokenHash('th-1'))?.userId).toBe(user.id)
+
+    await sessions.touch('th-1')
+    expect((await sessions.findByTokenHash('th-1'))?.expiresAt).toBe(expires)
+
+    await sessions.deleteByUser(user.id)
+    expect(await sessions.findByTokenHash('th-1')).toBeNull()
+  })
+
+  it('sessions repo: limpieza de expiradas y por token', async () => {
+    const db = freshDb()
+    const users = new SqliteUserRepository(db)
+    const sessions = new SqliteSessionRepository(db)
+    const user = await users.create({
+      username: 'exp',
+      displayName: 'Exp',
+      role: 'viewer',
+      passwordHash: 'ph',
+    })
+    await sessions.create({
+      userId: user.id,
+      tokenHash: 'old',
+      expiresAt: new Date(Date.now() - 1000).toISOString(),
+    })
+    await sessions.create({
+      userId: user.id,
+      tokenHash: 'new',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    })
+    await sessions.deleteExpired()
+    expect(await sessions.findByTokenHash('old')).toBeNull()
+    expect(await sessions.findByTokenHash('new')).not.toBeNull()
+
+    await sessions.deleteByTokenHash('new')
+    expect(await sessions.findByTokenHash('new')).toBeNull()
+  })
+
+  it('users repo: eliminar usuario', async () => {
+    const db = freshDb()
+    const users = new SqliteUserRepository(db)
+    const user = await users.create({
+      username: 'bye',
+      displayName: 'Bye',
+      role: 'viewer',
+      passwordHash: 'ph',
+    })
+    await users.delete(user.id)
+    expect(await users.findById(user.id)).toBeNull()
+    expect(await users.count()).toBe(0)
   })
 })

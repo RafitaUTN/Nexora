@@ -12,6 +12,7 @@ import type { Automation, NewAutomation } from '../entities/automation'
 import type { NewSource, DocumentSource } from '../entities/source'
 import type { NewTag, Tag, TagStats } from '../entities/tag'
 import type { ProviderId } from '../entities/settings'
+import type { NewUser, Role, User } from '../entities/user'
 
 export interface DocumentRepository {
   save(doc: NewDocument): Promise<Document>
@@ -127,4 +128,24 @@ export interface AutomationRepository {
     ok: boolean,
     detail: string,
   ): Promise<void>
+}
+
+export interface UserRepository {
+  create(user: Omit<NewUser, 'password'> & { passwordHash: string }): Promise<User>
+  findByUsername(username: string): Promise<User | null>
+  findById(id: number): Promise<User | null>
+  list(): Promise<User[]>
+  count(): Promise<number>
+  updateRole(id: number, role: Role): Promise<void>
+  updatePassword(id: number, passwordHash: string): Promise<void>
+  delete(id: number): Promise<void>
+}
+
+export interface SessionRepository {
+  create(session: { userId: number; tokenHash: string; expiresAt: string }): Promise<void>
+  findByTokenHash(tokenHash: string): Promise<{ userId: number; expiresAt: string } | null>
+  touch(tokenHash: string): Promise<void>
+  deleteByTokenHash(tokenHash: string): Promise<void>
+  deleteByUser(userId: number): Promise<void>
+  deleteExpired(): Promise<void>
 }
