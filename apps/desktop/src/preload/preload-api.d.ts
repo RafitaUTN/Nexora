@@ -165,6 +165,7 @@ export interface DocuMindApi {
   }
   updates: {
     check(): Promise<UpdateStatus>
+    download(): Promise<UpdateStatus>
     install(): Promise<{ ok: boolean }>
     state(): Promise<UpdateStatus>
   }

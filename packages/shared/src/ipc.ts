@@ -79,6 +79,7 @@ export const IpcChannel = {
 
   // Updates
   UpdatesCheck: 'updates:check',
+  UpdatesDownload: 'updates:download',
   UpdatesInstall: 'updates:install',
   UpdatesState: 'updates:state',
 

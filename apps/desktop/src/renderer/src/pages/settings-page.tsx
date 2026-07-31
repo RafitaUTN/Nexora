@@ -301,6 +301,12 @@ function UpdatesSection(): JSX.Element {
       push({ kind: 'error', title: 'No se pudo buscar actualizaciones', body: error.message }),
   })
 
+  const downloadMutation = useMutation({
+    mutationFn: () => window.api.updates.download(),
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo descargar', body: error.message }),
+  })
+
   const installMutation = useMutation({
     mutationFn: () => window.api.updates.install(),
     onSuccess: () => push({ kind: 'success', title: 'Reiniciando para instalar…' }),
@@ -333,6 +339,13 @@ function UpdatesSection(): JSX.Element {
       </div>
 
       {status?.message ? <p className="text-sm text-destructive">{status.message}</p> : null}
+
+      {status?.status === 'available' ? (
+        <Button size="sm" onClick={() => downloadMutation.mutate()} disabled={downloadMutation.isPending}>
+          {downloadMutation.isPending ? <Spinner /> : <Download />}
+          Descargar e instalar
+        </Button>
+      ) : null}
 
       {status?.status === 'downloading' ? (
         <div className="h-2 w-full overflow-hidden rounded-full bg-muted">

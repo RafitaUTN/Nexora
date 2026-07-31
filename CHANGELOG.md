@@ -3,6 +3,21 @@
 Todas las versiones notables de DocuMind Desktop se documentan aquí.
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado semántico.
 
+## [1.1.1] - 2026-07-31
+
+### Añadido
+- Actualizaciones automáticas reales: el proceso principal comprueba periódicamente en GitHub Releases respetando `updates.autoCheck` y `updates.checkIntervalHours` (arranca 15 s tras abrir la app y cada ciclo re-lee los ajustes).
+- Modal global de actualización: cuando hay una versión nueva disponible aparece un diálogo que informa de la versión y permite descargar/instalar o posponerlo («Más tarde»). No reaparece para la misma versión hasta que cambie. Canal IPC `UpdatesDownload` y preload `window.api.updates.download()`.
+
+### Cambiado
+- `UpdateManager` deja de auto-descargar (`autoDownload = false`): ahora primero pregunta al usuario. La sección de Ajustes muestra «Descargar e instalar» cuando hay disponible.
+
+### Corregido
+- `updates.check()` ya no queda bloqueado por `autoCheck=false`: el botón manual siempre consulta (el setting solo gobierna el chequeo automático).
+
+### Verificación
+- 293 tests / 37 ficheros; typecheck, lint, build, smoke y e2e OK (incluye nuevo e2e del modal de actualización).
+
 ## [1.1.0] — 2026-07-31
 
 ### Resumen

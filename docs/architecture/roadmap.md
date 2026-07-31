@@ -143,5 +143,12 @@
   - Verificación completa: audit, audit:code, typecheck, lint, 293 tests, cobertura (92.5/80.23/92.09/94.86), build, smoke y e2e.
   - Commit + tag `v1.1.0` que dispara `release.yml`.
 
+### FASE 16 — Actualizaciones automáticas con confirmación (🔜 tag `v1.1.1`)
+- Chequeo automático periódico en el proceso principal respetando `updates.autoCheck` y `updates.checkIntervalHours` (15 s tras arrancar, cada ciclo re-lee los ajustes). ✅
+- `UpdateManager` con `autoDownload = false`: pregunta antes de descargar. ✅
+- Modal global `UpdateModal`: al detectar versión nueva informa de la versión y permite descargar/instalar o posponer (no reaparece para la misma versión). Canal IPC `UpdatesDownload`. ✅
+- Fix: `updates.check()` ya no se bloquea por `autoCheck=false` (el botón manual siempre consulta). ✅
+- E2E del modal de actualización (`e2e/smoke.spec.ts`). ✅
+
 ## Post-MVP
 - Compartición por carpetas individuales y control granular por documento.

@@ -104,6 +104,7 @@ const api: DocuMindApi = {
 
   updates: {
     check: () => invoke(IpcChannel.UpdatesCheck),
+    download: () => invoke(IpcChannel.UpdatesDownload),
     install: () => invoke(IpcChannel.UpdatesInstall),
     state: () => invoke(IpcChannel.UpdatesState),
   },

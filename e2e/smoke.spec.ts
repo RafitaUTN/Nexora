@@ -109,3 +109,52 @@ test('smoke: abrir la app, escanear una carpeta y buscar', async () => {
     await app.close()
   }
 })
+
+test('updates: mostrar el modal cuando hay una nueva versión disponible', async () => {
+  const userData = mkdtempSync(join(tmpdir(), 'documind-e2e-data-'))
+
+  const app = await electron.launch({
+    executablePath: electronPath,
+    args: [mainEntry, '--disable-gpu', ...(process.env['CI'] ? ['--no-sandbox'] : [])],
+    env: { ...process.env, DOCUMIND_USER_DATA: userData, DOCUMIND_SMOKE: '' },
+    timeout: 120_000,
+  })
+
+  const page = await app.firstWindow()
+  await page.waitForLoadState('domcontentloaded')
+
+  try {
+    // Espera a que React haya montado (el modal suscribe al evento en el mount).
+    await expect(page.getByRole('heading', { name: 'Bienvenido a DocuMind' })).toBeVisible({
+      timeout: 30_000,
+    })
+
+    // Emula el evento del proceso principal: una actualización 9.9.9 disponible.
+    await app.evaluate(async ({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows()[0]
+      win.webContents.send('event:update:status', {
+        status: 'available',
+        currentVersion: '1.1.0',
+        latestVersion: '9.9.9',
+      })
+    })
+    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText('Nueva versión 9.9.9 disponible')).toBeVisible()
+
+    // «Más tarde» cierra el diálogo y no reaparece para la misma versión.
+    await page.getByRole('button', { name: 'Más tarde' }).click()
+    await expect(page.getByRole('dialog')).toBeHidden()
+
+    await app.evaluate(async ({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows()[0]
+      win.webContents.send('event:update:status', {
+        status: 'available',
+        currentVersion: '1.1.0',
+        latestVersion: '9.9.9',
+      })
+    })
+    await expect(page.getByRole('dialog')).toBeHidden({ timeout: 5_000 })
+  } finally {
+    await app.close()
+  }
+})

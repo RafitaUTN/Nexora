@@ -369,6 +369,7 @@ export function registerIpc(context: IpcContext): void {
 
   // Updates
   handle(IpcChannel.UpdatesCheck, async () => rt().updates.check())
+  handle(IpcChannel.UpdatesDownload, async () => rt().updates.download())
   handle(IpcChannel.UpdatesInstall, async () => {
     await rt().updates.install()
     return { ok: true }

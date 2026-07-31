@@ -18,8 +18,44 @@ export class UpdateManager {
   private listeners = new Set<(status: UpdateStatus) => void>()
   private state: UpdateStatus = { status: 'idle', currentVersion: APP_VERSION }
   private started = false
+  private autoCheckTimer: NodeJS.Timeout | null = null
+  private disposed = false
 
   constructor(private readonly settings: SettingsService) {}
+
+  /**
+   * Programa el chequeo automático periódico. Lee `autoCheck` y
+   * `checkIntervalHours` de los ajustes en cada ciclo, por lo que un cambio
+   * en Ajustes se refleja sin reiniciar. Solo se ejecuta con la app empaquetada.
+   */
+  startAutoCheck(): void {
+    if (this.autoCheckTimer) return
+    // El módulo `electron` solo está disponible en el proceso principal real;
+    // bajo tsx (smoke) no existe, así que se ignora silenciosamente.
+    void import('electron')
+      .then(({ app }) => {
+        if (!app.isPackaged) return
+        this.start()
+        this.autoCheckTimer = setTimeout(() => void this.runAutoCheckLoop(), 15_000)
+      })
+      .catch(() => undefined)
+  }
+
+  private async runAutoCheckLoop(): Promise<void> {
+    const settings = await this.settings.get()
+    if (!this.disposed && settings.updates.autoCheck) {
+      await this.check()
+    }
+    if (this.disposed) return
+    const hours = Math.max(1, settings.updates.checkIntervalHours)
+    this.autoCheckTimer = setTimeout(() => void this.runAutoCheckLoop(), hours * 3_600_000)
+  }
+
+  dispose(): void {
+    this.disposed = true
+    if (this.autoCheckTimer) clearTimeout(this.autoCheckTimer)
+    this.autoCheckTimer = null
+  }
 
   onStatus(listener: (status: UpdateStatus) => void): () => void {
     this.listeners.add(listener)
@@ -41,7 +77,7 @@ export class UpdateManager {
     try {
       const updater = electronUpdater.autoUpdater
       updater.logger = console
-      updater.autoDownload = true
+      updater.autoDownload = false
       updater.autoInstallOnAppQuit = true
       updater.on('checking-for-update', () =>
         this.notify({ status: 'checking', currentVersion: APP_VERSION }),
@@ -91,12 +127,24 @@ export class UpdateManager {
   async check(): Promise<UpdateStatus> {
     this.start()
     if (this.state.status === 'error') return this.state
-    const settings = await this.settings.get()
-    if (!settings.updates.autoCheck) {
-      return this.finalize({ status: 'current', currentVersion: APP_VERSION })
-    }
     try {
       await electronUpdater.autoUpdater.checkForUpdates()
+    } catch (error) {
+      this.notify({
+        status: 'error',
+        currentVersion: APP_VERSION,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+    return this.state
+  }
+
+  /** Descarga la actualización disponible (tras confirmar el usuario). */
+  async download(): Promise<UpdateStatus> {
+    this.start()
+    if (this.state.status !== 'available') return this.state
+    try {
+      await electronUpdater.autoUpdater.downloadUpdate()
     } catch (error) {
       this.notify({
         status: 'error',
@@ -111,10 +159,5 @@ export class UpdateManager {
     this.start()
     electronUpdater.autoUpdater.quitAndInstall()
     return { ok: true }
-  }
-
-  private finalize(status: UpdateStatus): UpdateStatus {
-    this.notify(status)
-    return status
   }
 }

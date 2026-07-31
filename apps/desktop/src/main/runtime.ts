@@ -517,6 +517,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
 
   const backups = new BackupManager(join(userDataPath, BACKUPS_DIR), logger)
   const updates = new UpdateManager(settingsService)
+  updates.startAutoCheck()
 
   const runtime: AppRuntime = {
     db,
@@ -666,6 +667,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
     async dispose(): Promise<void> {
       clearTimeout(autoSyncTimer)
       clearInterval(autoSyncInterval)
+      updates.dispose()
       watcher.close()
       await ocrEngine?.dispose?.()
       db.checkpoint()
