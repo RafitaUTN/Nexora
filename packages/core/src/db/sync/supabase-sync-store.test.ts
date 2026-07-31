@@ -179,10 +179,11 @@ describe('SupabaseSyncStore', () => {
     const { store, calls } = mockFetch((url) => {
       if (url.includes('sync_documents')) return [remoteDoc]
       if (url.includes('sync_tags')) return [remoteTag]
+      if (url.includes('sync_shares')) return []
       return [remoteAssignment]
     })
     const changes = await store.pull(100)
-    expect(calls.length).toBe(3)
+    expect(calls.length).toBe(4)
     expect(calls[0]?.url).toContain('updated_at_ms=gt.100')
     expect(calls[0]?.url).toContain('device_id=neq.device-1')
     expect(changes).toHaveLength(3)
@@ -204,6 +205,7 @@ describe('SupabaseSyncStore', () => {
     const { store } = mockFetch((url) => {
       if (url.includes('sync_documents')) return []
       if (url.includes('sync_document_tags')) return []
+      if (url.includes('sync_shares')) return []
       return [
         { device_id: 'device-2', local_id: 5, updated_at_ms: 700, deleted_at_ms: 700, name: 'x', color: null, created_at: null },
       ]
@@ -212,6 +214,77 @@ describe('SupabaseSyncStore', () => {
     expect(changes).toHaveLength(1)
     expect(changes[0]).toMatchObject({ entity: 'tag', op: 'delete', updatedAtMs: 700 })
     expect(changes[0]?.tag).toBeUndefined()
+  })
+
+  it('push de share usa uid canónico y no sobreescribe user_id', async () => {
+    const { store, calls } = mockFetch(() => [])
+    const change: SyncChange = {
+      entity: 'share',
+      entityKey: 'uid-abc-123',
+      op: 'upsert',
+      updatedAtMs: 600,
+      deviceId: 'device-1',
+      share: {
+        localId: 1,
+        uid: 'uid-abc-123',
+        ownerEmail: 'owner@example.com',
+        memberEmail: 'member@example.com',
+        role: 'viewer',
+        status: 'invited',
+        createdAt: null,
+      },
+    }
+    await store.push([change])
+    const call = calls.find((c) => c.url.includes('sync_shares'))
+    expect(call?.url).toContain('on_conflict=uid')
+    const body = JSON.parse(String(call?.init.body)) as Record<string, unknown>[]
+    expect(body[0]).toEqual({
+      device_id: 'device-1',
+      updated_at_ms: 600,
+      uid: 'uid-abc-123',
+      owner_email: 'owner@example.com',
+      member_email: 'member@example.com',
+      role: 'viewer',
+      status: 'invited',
+      created_at: null,
+      deleted_at_ms: null,
+    })
+    expect(body[0]).not.toHaveProperty('user_id')
+  })
+
+  it('pull convierte filas de sync_shares en cambios share', async () => {
+    const { store } = mockFetch((url) => {
+      if (url.includes('sync_documents')) return []
+      if (url.includes('sync_tags')) return []
+      if (url.includes('sync_document_tags')) return []
+      return [
+        {
+          device_id: 'device-2',
+          uid: 'uid-xyz',
+          updated_at_ms: 900,
+          deleted_at_ms: null,
+          owner_email: 'owner@example.com',
+          member_email: 'me@example.com',
+          role: 'viewer',
+          status: 'invited',
+          created_at: '2026-07-31',
+        },
+      ]
+    })
+    const changes = await store.pull(0)
+    expect(changes).toHaveLength(1)
+    expect(changes[0]).toMatchObject({
+      entity: 'share',
+      entityKey: 'uid-xyz',
+      op: 'upsert',
+      updatedAtMs: 900,
+      deviceId: 'device-2',
+    })
+    expect(changes[0]?.share).toMatchObject({
+      ownerEmail: 'owner@example.com',
+      memberEmail: 'me@example.com',
+      status: 'invited',
+    })
   })
 
   it('lanza ERR_SYNC_REMOTE cuando Supabase responde con error', async () => {

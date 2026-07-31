@@ -19,4 +19,7 @@ export const queryKeys = {
   users: ['users'] as const,
   license: ['license'] as const,
   sync: ['sync'] as const,
+  shares: ['shares'] as const,
+  sharesOutgoing: ['shares', 'outgoing'] as const,
+  sharesIncoming: ['shares', 'incoming'] as const,
 }

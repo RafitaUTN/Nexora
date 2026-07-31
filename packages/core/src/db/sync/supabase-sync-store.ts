@@ -30,6 +30,7 @@ const TABLES: TableSpec[] = [
   { entity: 'document', table: 'sync_documents', conflict: 'device_id,local_id' },
   { entity: 'tag', table: 'sync_tags', conflict: 'device_id,local_id' },
   { entity: 'assignment', table: 'sync_document_tags', conflict: 'device_id,document_id,tag_id' },
+  { entity: 'share', table: 'sync_shares', conflict: 'uid' },
 ]
 
 /**
@@ -106,6 +107,25 @@ export class SupabaseSyncStore implements SyncRemoteStore {
   }
 
   private toRow(entity: SyncEntity, change: SyncChange): RestRow {
+    if (entity === 'share') {
+      const base: RestRow = {
+        device_id: this.config.deviceId,
+        updated_at_ms: change.updatedAtMs,
+      }
+      if (change.op === 'delete') {
+        return { ...base, uid: change.entityKey, deleted_at_ms: change.updatedAtMs }
+      }
+      return {
+        ...base,
+        uid: change.entityKey,
+        owner_email: change.share?.ownerEmail ?? '',
+        member_email: change.share?.memberEmail ?? '',
+        role: change.share?.role ?? 'viewer',
+        status: change.share?.status ?? 'invited',
+        created_at: change.share?.createdAt ?? null,
+        deleted_at_ms: null,
+      }
+    }
     const key = Number(change.entityKey.split(':')[0])
     const base: RestRow = {
       device_id: this.config.deviceId,
@@ -167,6 +187,30 @@ export class SupabaseSyncStore implements SyncRemoteStore {
     const deletedAtMs = row.deleted_at_ms == null ? null : Number(row.deleted_at_ms)
     const op = deletedAtMs === null ? 'upsert' : 'delete'
     const deviceId = String(row.device_id)
+    const ownerUserId = row.user_id == null ? undefined : String(row.user_id)
+    if (entity === 'share') {
+      const uid = String(row.uid ?? '')
+      if (!uid) return null
+      const change: SyncChange = {
+        entity,
+        entityKey: uid,
+        op,
+        updatedAtMs: deletedAtMs ?? updatedAtMs,
+        deviceId,
+        ownerUserId,
+      }
+      if (op === 'delete') return change
+      change.share = {
+        localId: 0,
+        uid,
+        ownerEmail: String(row.owner_email ?? ''),
+        memberEmail: String(row.member_email ?? ''),
+        role: String(row.role ?? 'viewer'),
+        status: String(row.status ?? 'invited'),
+        createdAt: row.created_at == null ? null : String(row.created_at),
+      }
+      return change
+    }
     if (entity === 'assignment') {
       const documentId = Number(row.document_id)
       const tagId = Number(row.tag_id)
@@ -186,6 +230,7 @@ export class SupabaseSyncStore implements SyncRemoteStore {
       op,
       updatedAtMs: deletedAtMs ?? updatedAtMs,
       deviceId,
+      ownerUserId,
     }
     if (op === 'delete') return change
     if (entity === 'document') {

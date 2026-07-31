@@ -19,6 +19,8 @@ import type {
   QaResult,
   RegisterUserInput,
   Role,
+  Share,
+  ShareRole,
   SyncResult,
   SyncStatus,
   Tag,
@@ -184,6 +186,15 @@ export interface DocuMindApi {
     signOut(): Promise<SyncStatus>
     run(): Promise<SyncResult>
     ping(): Promise<{ ok: boolean }>
+  }
+  shares: {
+    list(): Promise<Share[]>
+    invite(memberEmail: string, role: ShareRole): Promise<Share>
+    accept(uid: string): Promise<Share>
+    revoke(uid: string): Promise<Share>
+    setRole(uid: string, role: ShareRole): Promise<Share>
+    outgoing(): Promise<Share[]>
+    incoming(): Promise<Share[]>
   }
   on<T>(channel: IpcEvent, callback: (payload: T) => void): () => void
 }

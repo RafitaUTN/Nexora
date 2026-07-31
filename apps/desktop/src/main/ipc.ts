@@ -9,11 +9,13 @@ import {
   documentFilterSchema,
   loginSchema,
   newAutomationSchema,
+  newShareSchema,
   newSourceSchema,
   newTagSchema,
   providerIdSchema,
   registerUserSchema,
   roleSchema,
+  shareRoleSchema,
 } from '@documind/domain'
 import { IpcChannel, IpcEvent, APP_NAME, APP_VERSION } from '@documind/shared'
 import type { AppRuntime } from './runtime'
@@ -583,6 +585,72 @@ export function registerIpc(context: IpcContext): void {
     await rt().sync.ping()
     return { ok: true }
   })
+
+  // Shares (compartición multiusuario). Invitar/revocar/cambiar rol requiere
+  // rol admin; aceptar una invitación entrante lo puede hacer cualquier
+  // usuario autenticado; consultar las listas es solo lectura.
+  handle(IpcChannel.SharesList, async () => {
+    requireRole('viewer')
+    return rt().shares.list()
+  })
+  handle(IpcChannel.SharesOutgoing, async () => {
+    requireRole('viewer')
+    return rt().shares.outgoing()
+  })
+  handle(IpcChannel.SharesIncoming, async () => {
+    requireRole('viewer')
+    return rt().shares.incoming()
+  })
+  handle(IpcChannel.SharesInvite, async (input) => {
+    requireRole('admin')
+    const { memberEmail, role } = newShareSchema.parse(input)
+    const share = await rt().shares.invite(memberEmail, role)
+    await rt().auditService.record({
+      action: 'share.invite',
+      entityType: 'share',
+      entityId: share.uid,
+      detail: `${share.memberEmail} · ${share.role}`,
+    })
+    rt().bus.emit('shares:changed', { count: (await rt().shares.list()).length })
+    return share
+  })
+  handle(IpcChannel.SharesAccept, async (uid: unknown) => {
+    requireRole('editor')
+    const share = await rt().shares.accept(String(uid ?? '').trim())
+    await rt().auditService.record({
+      action: 'share.accept',
+      entityType: 'share',
+      entityId: share.uid,
+      detail: `${share.ownerEmail} → ${share.role}`,
+    })
+    rt().bus.emit('shares:changed', { count: (await rt().shares.list()).length })
+    return share
+  })
+  handle(IpcChannel.SharesRevoke, async (uid: unknown) => {
+    requireRole('admin')
+    const share = await rt().shares.revoke(String(uid ?? '').trim())
+    await rt().auditService.record({
+      action: 'share.revoke',
+      entityType: 'share',
+      entityId: share.uid,
+      detail: share.memberEmail,
+    })
+    rt().bus.emit('shares:changed', { count: (await rt().shares.list()).length })
+    return share
+  })
+  handle(IpcChannel.SharesSetRole, async (payload: { uid?: unknown; role?: unknown }) => {
+    requireRole('admin')
+    const role = shareRoleSchema.parse(payload?.role)
+    const share = await rt().shares.setRole(String(payload?.uid ?? '').trim(), role)
+    await rt().auditService.record({
+      action: 'share.setRole',
+      entityType: 'share',
+      entityId: share.uid,
+      detail: `${share.memberEmail} → ${share.role}`,
+    })
+    rt().bus.emit('shares:changed', { count: (await rt().shares.list()).length })
+    return share
+  })
 }
 
 /** Reenvía los eventos del dominio al renderer por los canales IpcEvent. */
@@ -601,6 +669,7 @@ export function wireEvents(bus: EventBus, getWindow: () => BrowserWindow | null)
     bus.on('notification', (p) => send(IpcEvent.EventNotification, p)),
     bus.on('automation:run', (p) => send(IpcEvent.EventAutomationRun, p)),
     bus.on('sync:completed', (p) => send(IpcEvent.EventSyncStatus, p)),
+    bus.on('shares:changed', (p) => send(IpcEvent.EventSharesChanged, p)),
   ]
   return () => subs.forEach((unsub) => unsub())
 }

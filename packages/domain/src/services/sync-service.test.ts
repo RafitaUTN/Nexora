@@ -25,8 +25,8 @@ class FakeLocalStore implements SyncLocalStore {
   async pending(): Promise<SyncChange[]> {
     return this.pendingChanges
   }
-  async markSynced(keys: string[]): Promise<void> {
-    this.syncedKeys.push(...keys)
+  async markSynced(changes: SyncChange[]): Promise<void> {
+    this.syncedKeys.push(...changes.map(keyOf))
     this.pendingChanges = []
   }
   async applyRemote(changes: SyncChange[]): Promise<{ applied: number; skipped: number }> {

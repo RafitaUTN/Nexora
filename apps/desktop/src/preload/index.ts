@@ -126,6 +126,16 @@ const api: DocuMindApi = {
     ping: () => invoke(IpcChannel.SyncPing),
   },
 
+  shares: {
+    list: () => invoke(IpcChannel.SharesList),
+    invite: (memberEmail, role) => invoke(IpcChannel.SharesInvite, { memberEmail, role }),
+    accept: (uid) => invoke(IpcChannel.SharesAccept, uid),
+    revoke: (uid) => invoke(IpcChannel.SharesRevoke, uid),
+    setRole: (uid, role) => invoke(IpcChannel.SharesSetRole, { uid, role }),
+    outgoing: () => invoke(IpcChannel.SharesOutgoing),
+    incoming: () => invoke(IpcChannel.SharesIncoming),
+  },
+
   /** Suscripción a eventos del proceso principal (devuelve unsubscribe). */
   on: <T>(channel: IpcEvent, callback: (payload: T) => void) => {
     const listener = (_event: IpcRendererEvent, payload: T): void => callback(payload)

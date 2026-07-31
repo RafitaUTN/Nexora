@@ -14,13 +14,19 @@ export interface SyncRemoteStore {
 
 /**
  * Almacén local de sincronización (SQLite).
- * Lee el outbox y aplica cambios remotos con política LWW.
+ * Lee el outbox y aplica cambios remotos con resolución de conflictos por
+ * campos (merge): si hay un cambio local pendiente de la misma clave, se
+ * combinan ambos payloads campo a campo en lugar de descartar una versión
+ * entera (LWW por fila).
  */
 export interface SyncLocalStore {
   /** Cambios pendientes de subir (synced = false). */
   pending(): Promise<SyncChange[]>
-  /** Marca cambios como sincronizados. */
-  markSynced(keys: string[]): Promise<void>
+  /**
+   * Marca cambios como sincronizados y guarda su payload como línea base
+   * para la resolución de conflictos por campos en futuros pulls.
+   */
+  markSynced(changes: SyncChange[]): Promise<void>
   /**
    * Aplica cambios remotos con LWW: por cada cambio descarta los que lleven
    * un `updatedAtMs` menor o igual al estado local. Devuelve `{ applied, skipped }`.

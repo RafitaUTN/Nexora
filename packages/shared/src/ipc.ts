@@ -95,6 +95,15 @@ export const IpcChannel = {
   SyncSignOut: 'sync:signOut',
   SyncRun: 'sync:run',
   SyncPing: 'sync:ping',
+
+  // Shares (compartición multiusuario de la biblioteca)
+  SharesList: 'shares:list',
+  SharesInvite: 'shares:invite',
+  SharesAccept: 'shares:accept',
+  SharesRevoke: 'shares:revoke',
+  SharesSetRole: 'shares:setRole',
+  SharesOutgoing: 'shares:outgoing',
+  SharesIncoming: 'shares:incoming',
 } as const
 
 export type IpcChannel = (typeof IpcChannel)[keyof typeof IpcChannel]
@@ -113,6 +122,7 @@ export const IpcEvent = {
   EventAutomationRun: 'event:automation:run',
   EventGlobalSearch: 'event:globalSearch',
   EventSyncStatus: 'event:sync:status',
+  EventSharesChanged: 'event:shares:changed',
 } as const
 
 export type IpcEvent = (typeof IpcEvent)[keyof typeof IpcEvent]

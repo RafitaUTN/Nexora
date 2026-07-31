@@ -399,6 +399,71 @@ export const migrations: Migration[] = [
       END;
     `,
   },
+  {
+    version: 8,
+    name: 'shares',
+    up: `
+      CREATE TABLE IF NOT EXISTS shares (
+        id           INTEGER PRIMARY KEY,
+        uid          TEXT NOT NULL UNIQUE,
+        owner_email  TEXT NOT NULL,
+        member_email TEXT NOT NULL,
+        role         TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('viewer','editor')),
+        status       TEXT NOT NULL DEFAULT 'invited' CHECK (status IN ('invited','active','revoked')),
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (owner_email, member_email)
+      );
+      CREATE INDEX IF NOT EXISTS idx_shares_owner  ON shares(owner_email);
+      CREATE INDEX IF NOT EXISTS idx_shares_member ON shares(member_email);
+
+      CREATE TRIGGER IF NOT EXISTS sync_shares_ai AFTER INSERT ON shares BEGIN
+        INSERT INTO sync_outbox (entity, entity_key, op, updated_at_ms, synced)
+        VALUES ('share', new.uid, 'upsert',
+                CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER), 0)
+        ON CONFLICT(entity, entity_key) DO UPDATE SET
+          op = excluded.op, updated_at_ms = excluded.updated_at_ms, synced = 0;
+      END;
+      CREATE TRIGGER IF NOT EXISTS sync_shares_au AFTER UPDATE ON shares BEGIN
+        INSERT INTO sync_outbox (entity, entity_key, op, updated_at_ms, synced)
+        VALUES ('share', new.uid, 'upsert',
+                CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER), 0)
+        ON CONFLICT(entity, entity_key) DO UPDATE SET
+          op = excluded.op, updated_at_ms = excluded.updated_at_ms, synced = 0;
+      END;
+      CREATE TRIGGER IF NOT EXISTS sync_shares_ad AFTER DELETE ON shares BEGIN
+        INSERT INTO sync_outbox (entity, entity_key, op, updated_at_ms, synced)
+        VALUES ('share', old.uid, 'delete',
+                CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER), 0)
+        ON CONFLICT(entity, entity_key) DO UPDATE SET
+          op = excluded.op, updated_at_ms = excluded.updated_at_ms, synced = 0;
+      END;
+    `,
+  },
+  {
+    version: 9,
+    name: 'shared_documents',
+    up: `
+      ALTER TABLE documents ADD COLUMN shared INTEGER NOT NULL DEFAULT 0;
+      CREATE INDEX IF NOT EXISTS idx_documents_shared ON documents(shared);
+    `,
+  },
+  {
+    version: 10,
+    name: 'sync_last_payload',
+    up: `
+      -- Línea base del último payload subido por clave. Permite resolver
+      -- conflictos por campos: al aplicar un cambio remoto se compara campo a
+      -- campo contra esta línea base para saber qué campos tocó cada lado.
+      CREATE TABLE IF NOT EXISTS sync_last_payload (
+        entity      TEXT NOT NULL,
+        entity_key  TEXT NOT NULL,
+        payload     TEXT NOT NULL,
+        updated_at_ms INTEGER NOT NULL,
+        PRIMARY KEY (entity, entity_key)
+      );
+    `,
+  },
 ]
 
 export function runMigrations(db: SqliteDatabase, list: Migration[] = migrations): void {

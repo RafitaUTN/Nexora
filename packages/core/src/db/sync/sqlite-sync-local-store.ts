@@ -38,10 +38,17 @@ const SETTINGS_KEY = 'sync.settings'
  *   evitar colisiones entre dispositivos.
  */
 export class SqliteSyncLocalStore implements SyncLocalStore {
+  private currentUserId: string | null = null
+
   constructor(
     private readonly db: SqliteDatabase,
     private readonly deviceId: string,
-  ) {}
+    private readonly getCurrentUserId?: () => Promise<string | null>,
+  ) {
+    if (this.getCurrentUserId === undefined) {
+      this.currentUserId = null
+    }
+  }
 
   async getSettings(): Promise<SyncSettings> {
     const row = this.db
@@ -97,15 +104,18 @@ export class SqliteSyncLocalStore implements SyncLocalStore {
     return rows.map((row) => this.buildChange(row))
   }
 
-  async markSynced(keys: string[]): Promise<void> {
+  async markSynced(changes: SyncChange[]): Promise<void> {
     this.db.transaction(() => {
-      const stmt = this.db.prepare(`UPDATE sync_outbox SET synced = 1 WHERE entity = ? AND entity_key = ?`)
-      for (const key of keys) {
-        const sep = key.indexOf(':')
-        if (sep < 0) continue
-        const entity = key.slice(0, sep)
-        const entityKey = key.slice(sep + 1)
-        stmt.run(entity, entityKey)
+      const mark = this.db.prepare(`UPDATE sync_outbox SET synced = 1 WHERE entity = ? AND entity_key = ?`)
+      const baseline = this.db.prepare(
+        `INSERT INTO sync_last_payload (entity, entity_key, payload, updated_at_ms)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(entity, entity_key) DO UPDATE SET
+           payload = excluded.payload, updated_at_ms = excluded.updated_at_ms`,
+      )
+      for (const change of changes) {
+        mark.run(change.entity, change.entityKey)
+        baseline.run(change.entity, change.entityKey, JSON.stringify(change), change.updatedAtMs)
       }
     })
   }
@@ -113,8 +123,13 @@ export class SqliteSyncLocalStore implements SyncLocalStore {
   async applyRemote(changes: SyncChange[]): Promise<{ applied: number; skipped: number }> {
     let applied = 0
     let skipped = 0
+    this.currentUserId = this.getCurrentUserId ? await this.getCurrentUserId() : null
     this.db.transaction(() => {
       for (const change of changes) {
+        if (this.tryMergeDocument(change)) {
+          applied++
+          continue
+        }
         if (this.isLocalNewer(change)) {
           skipped++
           continue
@@ -156,10 +171,15 @@ export class SqliteSyncLocalStore implements SyncLocalStore {
     if (row.op === 'delete') return base
     if (row.entity === 'document') return { ...base, document: this.documentPayload(row) }
     if (row.entity === 'tag') return { ...base, tag: this.tagPayload(row) }
+    if (row.entity === 'share') return { ...base, share: this.sharePayload(row) }
     return { ...base, assignment: this.assignmentPayload(row) }
   }
 
   private documentPayload(row: OutboxRow): SyncChange['document'] {
+    return this.documentPayloadById(Number(row.entity_key))
+  }
+
+  private documentPayloadById(id: number): SyncChange['document'] {
     const doc = this.db
       .prepare(
         `SELECT id, source_id, path, filename, ext, mime_type, size_bytes, hash_sha256, status,
@@ -167,7 +187,7 @@ export class SqliteSyncLocalStore implements SyncLocalStore {
                 file_mtime_ms, added_at, updated_at, deleted_at
          FROM documents WHERE id = ? AND deleted_at IS NULL`,
       )
-      .get(Number(row.entity_key)) as DocumentRow | undefined
+      .get(id) as DocumentRow | undefined
     if (!doc) return undefined
     const contentRow = this.db
       .prepare(`SELECT content, content_hash FROM document_contents WHERE document_id = ?`)
@@ -208,9 +228,28 @@ export class SqliteSyncLocalStore implements SyncLocalStore {
     return { documentId: dt.document_id, tagId: dt.tag_id }
   }
 
+  private sharePayload(row: OutboxRow): SyncChange['share'] {
+    const share = this.db
+      .prepare(`SELECT id, uid, owner_email, member_email, role, status, created_at FROM shares WHERE uid = ?`)
+      .get(row.entity_key) as
+      | { id: number; uid: string; owner_email: string; member_email: string; role: string; status: string; created_at: string }
+      | undefined
+    if (!share) return undefined
+    return {
+      localId: share.id,
+      uid: share.uid,
+      ownerEmail: share.owner_email,
+      memberEmail: share.member_email,
+      role: share.role,
+      status: share.status,
+      createdAt: share.created_at,
+    }
+  }
+
   private applyChange(change: SyncChange): void {
     if (change.entity === 'document') this.applyDocument(change)
     else if (change.entity === 'tag') this.applyTag(change)
+    else if (change.entity === 'share') this.applyShare(change)
     else this.applyAssignment(change)
   }
 
@@ -229,12 +268,63 @@ export class SqliteSyncLocalStore implements SyncLocalStore {
       id = this.insertDocument(data)
       this.recordMapping('document', change.deviceId, change.entityKey, id)
     }
+    this.applyDocumentRow(data, id, this.isShared(change))
+  }
+
+  /**
+   * Resolución de conflictos por campos (FASE 15.4).
+   *
+   * Cuando llega un cambio remoto de un documento con un cambio local
+   * pendiente, se combina campo a campo en lugar de aplicar LWW por fila:
+   * para cada campo se usa la línea base (`sync_last_payload`) para saber qué
+   * lado lo modificó; si ambos lo modificaron, gana el lado con timestamp más
+   * reciente. El resultado se aplica localmente y se deja pendiente para que
+   * el siguiente ciclo lo suba (merge bidireccional). Devuelve `true` si
+   * resolvió el conflicto y `false` si no aplica.
+   */
+  private tryMergeDocument(change: SyncChange): boolean {
+    if (change.entity !== 'document' || change.op !== 'upsert' || !change.document) return false
+    const localId = this.mapId('document', change.deviceId, change.entityKey)
+    const candidates = new Set([change.entityKey])
+    if (localId !== null) candidates.add(String(localId))
+    const placeholders = [...candidates].map(() => '?').join(', ')
+    const pending = this.db
+      .prepare(
+        `SELECT entity_key, op, updated_at_ms FROM sync_outbox
+         WHERE entity = 'document' AND synced = 0 AND entity_key IN (${placeholders})
+         ORDER BY updated_at_ms DESC LIMIT 1`,
+      )
+      .get(...candidates) as { entity_key: string; op: SyncOperation; updated_at_ms: number } | undefined
+    if (!pending || pending.op !== 'upsert') return false
+    const localData = this.documentPayloadById(Number(pending.entity_key))
+    if (!localData) return false
+    const remoteData = change.document
+    const baseline = this.lastPayload(change.entity, pending.entity_key)
+    const merged = this.mergeDocumentPayload(
+      localData,
+      remoteData,
+      baseline,
+      pending.updated_at_ms,
+      change.updatedAtMs,
+    )
+    this.applyDocumentRow(merged, Number(pending.entity_key), this.isShared(change))
+    this.db
+      .prepare(
+        `UPDATE sync_outbox SET op = 'upsert', updated_at_ms = ?, synced = 0
+         WHERE entity = 'document' AND entity_key = ?`,
+      )
+      .run(Math.max(pending.updated_at_ms, change.updatedAtMs), pending.entity_key)
+    return true
+  }
+
+  private applyDocumentRow(data: NonNullable<SyncChange['document']>, id: number, shared: number): void {
     this.db
       .prepare(
         `UPDATE documents SET
            filename = ?, ext = ?, mime_type = ?, size_bytes = ?, hash_sha256 = ?,
            status = ?, title = ?, content_preview = substr(?, 1, 500), ocr_confidence = ?,
-           language = ?, version = ?, added_at = COALESCE(?, added_at), updated_at = datetime('now')
+           language = ?, version = ?, added_at = COALESCE(?, added_at), updated_at = datetime('now'),
+           shared = ?
          WHERE id = ?`,
       )
       .run(
@@ -250,6 +340,7 @@ export class SqliteSyncLocalStore implements SyncLocalStore {
         data.language,
         data.version,
         data.addedAt,
+        shared,
         id,
       )
     if (data.content !== null && data.contentHash !== null) {
@@ -262,6 +353,66 @@ export class SqliteSyncLocalStore implements SyncLocalStore {
         )
         .run(id, data.content, data.contentHash)
     }
+  }
+
+  private mergeDocumentPayload(
+    local: NonNullable<SyncChange['document']>,
+    remote: NonNullable<SyncChange['document']>,
+    baseline: NonNullable<SyncChange['document']> | null,
+    localTs: number,
+    remoteTs: number,
+  ): NonNullable<SyncChange['document']> {
+    const FIELDS: Array<keyof NonNullable<SyncChange['document']>> = [
+      'filename',
+      'ext',
+      'mimeType',
+      'sizeBytes',
+      'hashSha256',
+      'status',
+      'title',
+      'contentPreview',
+      'ocrConfidence',
+      'language',
+      'version',
+      'addedAt',
+      'content',
+      'contentHash',
+    ]
+    const result: NonNullable<SyncChange['document']> = { ...local }
+    const target = result as Record<string, unknown>
+    const changed = (side: NonNullable<SyncChange['document']>, field: (typeof FIELDS)[number]): boolean => {
+      if (!baseline) return true
+      return side[field] !== baseline[field]
+    }
+    for (const field of FIELDS) {
+      const localChanged = changed(local, field)
+      const remoteChanged = changed(remote, field)
+      if (!remoteChanged) continue
+      if (localChanged) {
+        target[field] = remoteTs > localTs ? remote[field] : local[field]
+      } else {
+        target[field] = remote[field]
+      }
+    }
+    return result
+  }
+
+  private lastPayload(entity: SyncEntity, entityKey: string): NonNullable<SyncChange['document']> | null {
+    const row = this.db
+      .prepare(`SELECT payload FROM sync_last_payload WHERE entity = ? AND entity_key = ?`)
+      .get(entity, entityKey) as { payload: string } | undefined
+    if (!row) return null
+    try {
+      return (JSON.parse(row.payload) as SyncChange).document ?? null
+    } catch {
+      return null
+    }
+  }
+
+  private isShared(change: SyncChange): number {
+    return change.ownerUserId != null && this.currentUserId != null && change.ownerUserId !== this.currentUserId
+      ? 1
+      : 0
   }
 
   private insertDocument(data: NonNullable<SyncChange['document']>): number {
@@ -339,6 +490,32 @@ export class SqliteSyncLocalStore implements SyncLocalStore {
     this.db
       .prepare(`INSERT OR IGNORE INTO document_tags (document_id, tag_id) VALUES (?, ?)`)
       .run(documentId, tagId)
+  }
+
+  private applyShare(change: SyncChange): void {
+    const data = change.share
+    if (change.op === 'delete') {
+      this.db.prepare(`DELETE FROM shares WHERE uid = ?`).run(change.entityKey)
+      return
+    }
+    if (!data) return
+    const existing = this.db
+      .prepare(`SELECT id FROM shares WHERE uid = ?`)
+      .get(change.entityKey) as { id: number } | undefined
+    if (existing) {
+      this.db
+        .prepare(
+          `UPDATE shares SET owner_email = ?, member_email = ?, role = ?, status = ?, updated_at = datetime('now') WHERE uid = ?`,
+        )
+        .run(data.ownerEmail, data.memberEmail, data.role, data.status, change.entityKey)
+      return
+    }
+    this.db
+      .prepare(
+        `INSERT INTO shares (uid, owner_email, member_email, role, status, created_at)
+         VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')))`,
+      )
+      .run(change.entityKey, data.ownerEmail, data.memberEmail, data.role, data.status, data.createdAt)
   }
 
   private mapId(entity: SyncEntity, deviceId: string, localId: string): number | null {

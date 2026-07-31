@@ -3,6 +3,24 @@
 Todas las versiones notables de DocuMind Desktop se documentan aquí.
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado semántico.
 
+## [1.1.0] — 2026-07-31
+
+### Resumen
+Colaboración multiusuario: compartición de la biblioteca por invitación (roles viewer/editor), RLS de lectura para miembros compartidos en Supabase y resolución de conflictos por campos en lugar de LWW por fila.
+
+### Añadido
+- FASE 15.1: modelo de compartición. Entidad `share` (uid canónico, owner/member email, rol `viewer`/`editor`, estado `invited`/`active`/`revoked`), `ShareService` (invite/accept/revoke/setRole/list), puertos `ShareRepository`/`ShareMailResolver`; migración 008 `shares` (tabla + triggers outbox `sync_shares_*`) y 009 `shared_documents` (columna `shared`); `SqliteShareRepository`; soporte `share` en `SqliteSyncLocalStore`/`SupabaseSyncStore` (push con uid canónico, pull con `owner_user_id`).
+- FASE 15.2: RLS remoto `rls_shared_libraries` aplicado en `jhxczeottwfmxuohdwqd`: tabla `sync_shares` con políticas `sync_shares_own` / `sync_shares_member_select` / `sync_shares_member_update` y políticas de lectura compartida `sync_documents_shared_read`, `sync_tags_shared_read`, `sync_document_tags_shared_read` para miembros. `SqliteSyncLocalStore` recibe `getCurrentUserId()` y marca `shared = 1` en los documentos de otro propietario.
+- FASE 15.3: canales `SharesList|Invite|Accept|Revoke|SetRole|Outgoing|Incoming` con validación Zod; guards de rol (admin invite/revoke/setRole, editor accept, viewer consultas); auditoría `share.*`; evento `shares:changed` que invalida la UI; preload expone `window.api.shares`; sección «Compartir» en Ajustes (invitar por email, cambiar rol, revocar, invitaciones entrantes con aceptar, salientes y badges de estado).
+- FASE 15.4: resolución de conflictos por campos. Migración 010 `sync_last_payload` guarda el último payload subido como línea base; `applyRemote` fusiona documento a documento campo a campo cuando hay outbox local pendiente (si ambos lados modificaron el mismo campo gana el de mayor `updatedAtMs`) y deja el resultado pendiente para propagarlo (merge bidireccional).
+
+### Cambiado
+- `SyncLocalStore.markSynced` ahora recibe `SyncChange[]` (antes `string[]`) para poder persistir el payload subido como línea base.
+- `applyRemote` pasa de LWW por fila a merge por campos para documentos con cambios locales pendientes (FASE 15.4).
+
+### Verificación
+- 293 tests / 37 ficheros; cobertura 92.5 % statements / 80.23 % ramas / 92.09 % funciones / 94.86 % líneas; typecheck, lint, build, smoke y e2e OK; `npm run audit` y `audit:code` limpios.
+
 ## [1.0.0] — 2026-07-31
 
 ### Resumen

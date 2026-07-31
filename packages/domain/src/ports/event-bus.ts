@@ -10,6 +10,7 @@ export interface EventMap {
   'ai:progress': { task: string; processed: number; total: number }
   'automation:run': { automationId: number; documentId: number; ok: boolean }
   'sync:completed': { pushed: number; pulled: number; applied: number; skipped: number }
+  'shares:changed': { count: number }
   notification: {
     level: 'info' | 'success' | 'warning' | 'error'
     title: string

@@ -1,5 +1,5 @@
 export const APP_NAME = 'DocuMind'
-export const APP_VERSION = '1.0.0'
+export const APP_VERSION = '1.1.0'
 
 export const SUPPORTED_TEXT_EXTENSIONS = [
   'pdf',

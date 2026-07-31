@@ -112,16 +112,37 @@ describe('SqliteSyncLocalStore', () => {
       const { store, db } = fresh()
       db.prepare(`INSERT INTO tags (name) VALUES ('t1')`).run()
       expect((await store.pending()).length).toBe(1)
-      await store.markSynced(['tag:1'])
+      const pending = await store.pending()
+      await store.markSynced(pending)
       expect(await store.pending()).toEqual([])
       const status = await store.status()
       expect(status.pending).toBe(0)
     })
 
-    it('ignora claves inexistentes', async () => {
+    it('ignora cambios sin fila subyacente', async () => {
       const { store } = fresh()
-      await store.markSynced(['tag:999'])
+      await store.markSynced([
+        {
+          entity: 'tag',
+          entityKey: '999',
+          op: 'upsert',
+          updatedAtMs: 1000,
+          deviceId: 'device-1',
+          tag: { localId: 999, name: 'fantasma', color: null, createdAt: null },
+        },
+      ])
       expect(await store.pending()).toEqual([])
+    })
+
+    it('guarda el payload subido como línea base por clave', async () => {
+      const { store, db } = fresh()
+      db.prepare(`INSERT INTO tags (name) VALUES ('t1')`).run()
+      const pending = await store.pending()
+      await store.markSynced(pending)
+      const row = db.prepare(`SELECT payload FROM sync_last_payload WHERE entity = 'tag'`).get() as {
+        payload: string
+      }
+      expect(JSON.parse(row.payload)).toMatchObject({ entity: 'tag', entityKey: '1' })
     })
   })
 
@@ -167,7 +188,7 @@ describe('SqliteSyncLocalStore', () => {
       expect(await store.pending()).toEqual([])
     })
 
-    it('aplica LWW: descarta cambios remotos más antiguos que el estado local', async () => {
+    it('fusiona por campos: un cambio remoto antiguo no pisa el estado local', async () => {
       const { store, db } = fresh()
       db.prepare(`INSERT INTO documents (source_id, path, filename, ext, size_bytes, hash_sha256)
                   VALUES (NULL, '/x.pdf', 'x.pdf', 'pdf', 10, 'hx')`).run()
@@ -196,7 +217,7 @@ describe('SqliteSyncLocalStore', () => {
         },
       }
       const result = await store.applyRemote([change])
-      expect(result).toEqual({ applied: 0, skipped: 1 })
+      expect(result).toEqual({ applied: 1, skipped: 0 })
       const row = db.prepare(`SELECT title FROM documents WHERE id = 1`).get() as { title: string }
       expect(row.title).toBeNull()
     })
@@ -358,6 +379,438 @@ describe('SqliteSyncLocalStore', () => {
       }
       expect(row.document_id).toBe(100)
       expect(row.tag_id).toBe(5)
+    })
+
+    it('marca como compartidos los documentos de otro propietario', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'documind-sync-shared-'))
+      const db = new SqliteDatabase(join(dir, 'test.db'))
+      runMigrations(db)
+      dbs.push(db)
+      const store = new SqliteSyncLocalStore(db, 'device-1', async () => 'user-yo')
+      const base = {
+        entity: 'document' as const,
+        op: 'upsert' as const,
+        updatedAtMs: 2000,
+        deviceId: 'device-2',
+        document: {
+          localId: 9,
+          filename: 'compartido.pdf',
+          ext: 'pdf',
+          mimeType: null,
+          sizeBytes: 1,
+          hashSha256: 'h9',
+          status: 'indexed' as const,
+          title: null,
+          contentPreview: null,
+          ocrConfidence: null,
+          language: null,
+          version: 1,
+          addedAt: null,
+          content: null,
+          contentHash: null,
+        },
+      }
+      await store.applyRemote([
+        { ...base, entityKey: '9', ownerUserId: 'user-otro' },
+        {
+          ...base,
+          entityKey: '10',
+          ownerUserId: 'user-yo',
+          document: { ...base.document, localId: 10, filename: 'propio.pdf', hashSha256: 'h10' },
+        },
+      ])
+      const rows = db
+        .prepare(`SELECT filename, shared FROM documents ORDER BY id`)
+        .all() as { filename: string; shared: number }[]
+      expect(rows).toHaveLength(2)
+      expect(rows.find((r) => r.filename === 'compartido.pdf')?.shared).toBe(1)
+      expect(rows.find((r) => r.filename === 'propio.pdf')?.shared).toBe(0)
+    })
+
+    it('fusiona por campos cuando cada lado edita campos distintos', async () => {
+      const { store, db } = fresh()
+      db.prepare(`INSERT INTO documents (source_id, path, filename, ext, size_bytes, hash_sha256, title)
+                  VALUES (NULL, '/a.pdf', 'a.pdf', 'pdf', 1, 'h1', 'original')`).run()
+      const baseline: SyncChange = {
+        entity: 'document',
+        entityKey: '1',
+        op: 'upsert',
+        updatedAtMs: 1000,
+        deviceId: 'device-1',
+        document: {
+          localId: 1,
+          filename: 'a.pdf',
+          ext: 'pdf',
+          mimeType: null,
+          sizeBytes: 1,
+          hashSha256: 'h1',
+          status: 'indexed',
+          title: 'original',
+          contentPreview: null,
+          ocrConfidence: null,
+          language: null,
+          version: 1,
+          addedAt: null,
+          content: null,
+          contentHash: null,
+        },
+      }
+      await store.markSynced([baseline])
+      db.prepare(`UPDATE documents SET title = 'local title', updated_at = datetime('now') WHERE id = 1`).run()
+      const remote: SyncChange = {
+        entity: 'document',
+        entityKey: '1',
+        op: 'upsert',
+        updatedAtMs: 2000,
+        deviceId: 'device-2',
+        document: {
+          localId: 1,
+          filename: 'b.pdf',
+          ext: 'pdf',
+          mimeType: null,
+          sizeBytes: 1,
+          hashSha256: 'h1',
+          status: 'indexed',
+          title: 'original',
+          contentPreview: null,
+          ocrConfidence: null,
+          language: null,
+          version: 1,
+          addedAt: null,
+          content: null,
+          contentHash: null,
+        },
+      }
+      const result = await store.applyRemote([remote])
+      expect(result).toEqual({ applied: 1, skipped: 0 })
+      const row = db.prepare(`SELECT filename, title FROM documents WHERE id = 1`).get() as {
+        filename: string
+        title: string | null
+      }
+      expect(row.filename).toBe('b.pdf')
+      expect(row.title).toBe('local title')
+    })
+
+    it('en conflicto del mismo campo gana el lado con timestamp más reciente', async () => {
+      const { store, db } = fresh()
+      db.prepare(`INSERT INTO documents (source_id, path, filename, ext, size_bytes, hash_sha256, title)
+                  VALUES (NULL, '/a.pdf', 'a.pdf', 'pdf', 1, 'h1', 'original')`).run()
+      const baseline: SyncChange = {
+        entity: 'document',
+        entityKey: '1',
+        op: 'upsert',
+        updatedAtMs: 1000,
+        deviceId: 'device-1',
+        document: {
+          localId: 1,
+          filename: 'a.pdf',
+          ext: 'pdf',
+          mimeType: null,
+          sizeBytes: 1,
+          hashSha256: 'h1',
+          status: 'indexed',
+          title: 'original',
+          contentPreview: null,
+          ocrConfidence: null,
+          language: null,
+          version: 1,
+          addedAt: null,
+          content: null,
+          contentHash: null,
+        },
+      }
+      await store.markSynced([baseline])
+      db.prepare(`UPDATE documents SET title = 'local edit', updated_at = datetime('now') WHERE id = 1`).run()
+      db.prepare(
+        `UPDATE sync_outbox SET updated_at_ms = 5000 WHERE entity = 'document' AND entity_key = '1'`,
+      ).run()
+      const remote: SyncChange = {
+        entity: 'document',
+        entityKey: '1',
+        op: 'upsert',
+        updatedAtMs: 6000,
+        deviceId: 'device-2',
+        document: {
+          localId: 1,
+          filename: 'a.pdf',
+          ext: 'pdf',
+          mimeType: null,
+          sizeBytes: 1,
+          hashSha256: 'h1',
+          status: 'indexed',
+          title: 'remote edit',
+          contentPreview: null,
+          ocrConfidence: null,
+          language: null,
+          version: 1,
+          addedAt: null,
+          content: null,
+          contentHash: null,
+        },
+      }
+      await store.applyRemote([remote])
+      const row = db.prepare(`SELECT title FROM documents WHERE id = 1`).get() as { title: string | null }
+      expect(row.title).toBe('remote edit')
+    })
+
+    it('deja el merge pendiente para propagarlo en el siguiente ciclo', async () => {
+      const { store, db } = fresh()
+      db.prepare(`INSERT INTO documents (source_id, path, filename, ext, size_bytes, hash_sha256, title)
+                  VALUES (NULL, '/a.pdf', 'a.pdf', 'pdf', 1, 'h1', 'original')`).run()
+      const baseline: SyncChange = {
+        entity: 'document',
+        entityKey: '1',
+        op: 'upsert',
+        updatedAtMs: 1000,
+        deviceId: 'device-1',
+        document: {
+          localId: 1,
+          filename: 'a.pdf',
+          ext: 'pdf',
+          mimeType: null,
+          sizeBytes: 1,
+          hashSha256: 'h1',
+          status: 'indexed',
+          title: 'original',
+          contentPreview: null,
+          ocrConfidence: null,
+          language: null,
+          version: 1,
+          addedAt: null,
+          content: null,
+          contentHash: null,
+        },
+      }
+      await store.markSynced([baseline])
+      db.prepare(`UPDATE documents SET title = 'local edit', updated_at = datetime('now') WHERE id = 1`).run()
+      const remote: SyncChange = {
+        entity: 'document',
+        entityKey: '1',
+        op: 'upsert',
+        updatedAtMs: 6000,
+        deviceId: 'device-2',
+        document: {
+          localId: 1,
+          filename: 'b.pdf',
+          ext: 'pdf',
+          mimeType: null,
+          sizeBytes: 1,
+          hashSha256: 'h1',
+          status: 'indexed',
+          title: 'original',
+          contentPreview: null,
+          ocrConfidence: null,
+          language: null,
+          version: 1,
+          addedAt: null,
+          content: null,
+          contentHash: null,
+        },
+      }
+      await store.applyRemote([remote])
+      const pending = await store.pending()
+      expect(pending).toHaveLength(1)
+      expect(pending[0]?.document?.title).toBe('local edit')
+      expect(pending[0]?.document?.filename).toBe('b.pdf')
+    })
+
+    it('aplica cambios de share entrantes', async () => {
+      const { store, db } = fresh()
+      await store.applyRemote([
+        {
+          entity: 'share',
+          entityKey: 'uid-1',
+          op: 'upsert',
+          updatedAtMs: 1000,
+          deviceId: 'device-2',
+          ownerUserId: 'user-otro',
+          share: {
+            localId: 0,
+            uid: 'uid-1',
+            ownerEmail: 'owner@example.com',
+            memberEmail: 'yo@example.com',
+            role: 'viewer',
+            status: 'invited',
+            createdAt: null,
+          },
+        },
+      ])
+      const row = db.prepare(`SELECT uid, status FROM shares WHERE uid = 'uid-1'`).get() as {
+        uid: string
+        status: string
+      }
+      expect(row.status).toBe('invited')
+    })
+
+    it('actualiza un share existente y aplica tombstones de share', async () => {
+      const { store, db } = fresh()
+      const upsert: SyncChange = {
+        entity: 'share',
+        entityKey: 'uid-1',
+        op: 'upsert',
+        updatedAtMs: 1000,
+        deviceId: 'device-2',
+        share: {
+          localId: 0,
+          uid: 'uid-1',
+          ownerEmail: 'owner@example.com',
+          memberEmail: 'yo@example.com',
+          role: 'viewer',
+          status: 'invited',
+          createdAt: null,
+        },
+      }
+      await store.applyRemote([upsert])
+      const share = upsert.share
+      if (!share) throw new Error('esperado payload de share')
+      await store.applyRemote([{ ...upsert, updatedAtMs: 2000, share: { ...share, status: 'active' } }])
+      const row = db.prepare(`SELECT status FROM shares WHERE uid = 'uid-1'`).get() as { status: string }
+      expect(row.status).toBe('active')
+      const count = db.prepare(`SELECT COUNT(*) AS n FROM shares WHERE uid = 'uid-1'`).get() as { n: number }
+      expect(count.n).toBe(1)
+      const tombstone: SyncChange = {
+        entity: 'share',
+        entityKey: 'uid-1',
+        op: 'delete',
+        updatedAtMs: 3000,
+        deviceId: 'device-2',
+      }
+      await store.applyRemote([tombstone])
+      const after = db.prepare(`SELECT COUNT(*) AS n FROM shares WHERE uid = 'uid-1'`).get() as { n: number }
+      expect(after.n).toBe(0)
+    })
+
+    it('no fusiona cuando el pendiente local es un delete', async () => {
+      const { store, db } = fresh()
+      db.prepare(`INSERT INTO documents (source_id, path, filename, ext, size_bytes, hash_sha256)
+                  VALUES (NULL, '/x.pdf', 'x.pdf', 'pdf', 10, 'hx')`).run()
+      db.prepare(`UPDATE sync_outbox SET op = 'delete' WHERE entity = 'document' AND entity_key = '1'`).run()
+      const remote: SyncChange = {
+        entity: 'document',
+        entityKey: '1',
+        op: 'upsert',
+        updatedAtMs: 6000,
+        deviceId: 'device-2',
+        document: {
+          localId: 1,
+          filename: 'remoto.pdf',
+          ext: 'pdf',
+          mimeType: null,
+          sizeBytes: 10,
+          hashSha256: 'hx',
+          status: 'indexed',
+          title: null,
+          contentPreview: null,
+          ocrConfidence: null,
+          language: null,
+          version: 1,
+          addedAt: null,
+          content: null,
+          contentHash: null,
+        },
+      }
+      const result = await store.applyRemote([remote])
+      expect(result).toEqual({ applied: 0, skipped: 1 })
+      const row = db.prepare(`SELECT filename FROM documents WHERE id = 1`).get() as { filename: string }
+      expect(row.filename).toBe('x.pdf')
+    })
+
+    it('no fusiona sin fila subyacente local', async () => {
+      const { store, db } = fresh()
+      db.prepare(`INSERT INTO documents (source_id, path, filename, ext, size_bytes, hash_sha256)
+                  VALUES (NULL, '/x.pdf', 'x.pdf', 'pdf', 10, 'hx')`).run()
+      db.prepare(`UPDATE documents SET deleted_at = datetime('now') WHERE id = 1`).run()
+      const remote: SyncChange = {
+        entity: 'document',
+        entityKey: '1',
+        op: 'upsert',
+        updatedAtMs: 6000,
+        deviceId: 'device-2',
+        document: {
+          localId: 1,
+          filename: 'remoto.pdf',
+          ext: 'pdf',
+          mimeType: null,
+          sizeBytes: 10,
+          hashSha256: 'hx',
+          status: 'indexed',
+          title: null,
+          contentPreview: null,
+          ocrConfidence: null,
+          language: null,
+          version: 1,
+          addedAt: null,
+          content: null,
+          contentHash: null,
+        },
+      }
+      const result = await store.applyRemote([remote])
+      expect(result).toEqual({ applied: 0, skipped: 1 })
+      const row = db.prepare(`SELECT deleted_at FROM documents WHERE id = 1`).get() as {
+        deleted_at: string | null
+      }
+      expect(row.deleted_at).not.toBeNull()
+    })
+
+    it('fusiona tomando la línea base corrupta como inexistente', async () => {
+      const { store, db } = fresh()
+      db.prepare(`INSERT INTO documents (source_id, path, filename, ext, size_bytes, hash_sha256, title)
+                  VALUES (NULL, '/a.pdf', 'a.pdf', 'pdf', 1, 'h1', 'original')`).run()
+      db.prepare(
+        `INSERT INTO sync_last_payload (entity, entity_key, payload, updated_at_ms)
+         VALUES ('document', '1', '{no-json', 1000)`,
+      ).run()
+      db.prepare(`UPDATE documents SET title = 'local edit', updated_at = datetime('now') WHERE id = 1`).run()
+      db.prepare(`UPDATE sync_outbox SET updated_at_ms = 2000 WHERE entity = 'document' AND entity_key = '1'`).run()
+      const remote: SyncChange = {
+        entity: 'document',
+        entityKey: '1',
+        op: 'upsert',
+        updatedAtMs: 5000,
+        deviceId: 'device-2',
+        document: {
+          localId: 1,
+          filename: 'b.pdf',
+          ext: 'pdf',
+          mimeType: null,
+          sizeBytes: 1,
+          hashSha256: 'h1',
+          status: 'indexed',
+          title: 'original',
+          contentPreview: null,
+          ocrConfidence: null,
+          language: null,
+          version: 1,
+          addedAt: null,
+          content: null,
+          contentHash: null,
+        },
+      }
+      await store.applyRemote([remote])
+      const row = db.prepare(`SELECT filename, title FROM documents WHERE id = 1`).get() as {
+        filename: string
+        title: string | null
+      }
+      expect(row.filename).toBe('b.pdf')
+      expect(row.title).toBe('original')
+    })
+
+    it('no fusiona un upsert sin payload de documento', async () => {
+      const { store, db } = fresh()
+      db.prepare(`INSERT INTO documents (source_id, path, filename, ext, size_bytes, hash_sha256)
+                  VALUES (NULL, '/x.pdf', 'x.pdf', 'pdf', 10, 'hx')`).run()
+      db.prepare(`UPDATE sync_outbox SET updated_at_ms = 500 WHERE entity = 'document' AND entity_key = '1'`).run()
+      const change: SyncChange = {
+        entity: 'document',
+        entityKey: '1',
+        op: 'upsert',
+        updatedAtMs: 1000,
+        deviceId: 'device-2',
+      }
+      const result = await store.applyRemote([change])
+      expect(result).toEqual({ applied: 1, skipped: 0 })
+      const row = db.prepare(`SELECT filename FROM documents WHERE id = 1`).get() as { filename: string }
+      expect(row.filename).toBe('x.pdf')
     })
   })
 })

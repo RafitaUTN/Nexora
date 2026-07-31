@@ -125,5 +125,23 @@
 - Verificación completa: audit, audit:code, typecheck, lint, tests (251), cobertura ≥ umbrales, build, smoke y e2e.
 - Commit + tag `v1.0.0` que dispara `release.yml` (build/publish x3 OS + feed de actualizaciones).
 
+### FASE 15 — Colaboración multiusuario (✅ tag `v1.1.0`)
+- FASE 15.1 Modelo de compartición. ✅
+  - Dominio: entidad `share` (uid canónico, ownerEmail/memberEmail, rol `viewer`/`editor`, estado `invited`/`active`/`revoked`), `ShareService` (invite/accept/revoke/setRole/list), puertos `ShareRepository`/`ShareMailResolver`.
+  - Core: migración 008 `shares` (tabla + triggers outbox `sync_shares_*`) y 009 `shared_documents` (columna `shared`); `SqliteShareRepository`; `share` en `SqliteSyncLocalStore`/`SupabaseSyncStore` (push con uid canónico, pull con `owner_user_id`).
+- FASE 15.2 RLS remoto y marcado local de compartidos. ✅
+  - Migración remota `rls_shared_libraries` (aplicada): tabla `sync_shares` + políticas `sync_shares_own` (owner) / `sync_shares_member_select` / `sync_shares_member_update`, y políticas de lectura compartida `sync_documents_shared_read`, `sync_tags_shared_read`, `sync_document_tags_shared_read` para miembros.
+  - `SqliteSyncLocalStore` recibe `getCurrentUserId()` y marca `shared = 1` en documentos de otro propietario.
+- Release `v1.0.0` publicado. ✅ (run `30644903518`, assets win/mac/linux; draft → público)
+- FASE 15.3 Integración IPC y UI. ✅
+  - Canales `SharesList/Invite/Accept/Revoke/SetRole/Outgoing/Incoming` con Zod; roles: admin invite/revoke/setRole, editor accept, viewer consultas; auditoría `share.*`; evento `shares:changed` para invalidar la UI.
+  - Preload expone `window.api.shares`; renderer: sección «Compartir» en Ajustes (invitar por email, roles, revocar, pendientes entrantes/aceptar, salientes, badges de estado).
+- FASE 15.4 Resolución de conflictos por campos. ✅
+  - Migración 010 `sync_last_payload`: `markSynced` guarda el último payload subido como línea base por clave.
+  - `tryMergeDocument` en `applyRemote`: para documentos con outbox local pendiente, combina campo a campo contra la línea base; si ambos lados modificaron el mismo campo gana el de mayor `updatedAtMs`; el resultado queda pendiente (merge bidireccional).
+- FASE 15.5 Verificación y release `v1.1.0`. ✅
+  - Verificación completa: audit, audit:code, typecheck, lint, 293 tests, cobertura (92.5/80.23/92.09/94.86), build, smoke y e2e.
+  - Commit + tag `v1.1.0` que dispara `release.yml`.
+
 ## Post-MVP
-- Colaboración multiusuario (invitaciones a bibliotecas compartidas), resolución de conflictos por campos.
+- Compartición por carpetas individuales y control granular por documento.

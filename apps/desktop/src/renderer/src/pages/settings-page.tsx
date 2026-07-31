@@ -1,8 +1,32 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Cloud, Download, KeyRound, LogOut, RefreshCw, Save, ShieldCheck, Trash2, Wifi } from 'lucide-react'
+import {
+  Cloud,
+  Download,
+  KeyRound,
+  LogOut,
+  RefreshCw,
+  Save,
+  Share2,
+  ShieldCheck,
+  Trash2,
+  UserPlus,
+  UserX,
+  Wifi,
+} from 'lucide-react'
 import { IpcEvent } from '@documind/shared'
-import type { AppSettings, License, LicenseKey, LicenseTier, ProviderId, SyncStatus, UpdateStatus } from '@/types'
+import type {
+  AppSettings,
+  License,
+  LicenseKey,
+  LicenseTier,
+  ProviderId,
+  Share,
+  ShareRole,
+  ShareStatus,
+  SyncStatus,
+  UpdateStatus,
+} from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -154,6 +178,17 @@ const TIER_LABELS: Record<LicenseTier, string> = {
   free: 'Gratuita',
   pro: 'Pro',
   enterprise: 'Empresa',
+}
+
+const SHARE_ROLE_LABELS: Record<ShareRole, string> = {
+  viewer: 'Solo lectura',
+  editor: 'Edición',
+}
+
+const SHARE_STATUS_META: Record<ShareStatus, { label: string; tone: 'info' | 'success' | 'error' }> = {
+  invited: { label: 'Invitado', tone: 'info' },
+  active: { label: 'Activo', tone: 'success' },
+  revoked: { label: 'Revocado', tone: 'error' },
 }
 
 const LICENSE_STATUS_META: Record<
@@ -565,6 +600,214 @@ function SyncSection(): JSX.Element {
   )
 }
 
+function SharesSection(): JSX.Element {
+  const queryClient = useQueryClient()
+  const push = useToasts((s) => s.push)
+  const currentUser = useAuth((s) => s.currentUser)
+  const isAdmin = currentUser?.role === 'admin'
+  const [memberEmail, setMemberEmail] = useState('')
+  const [role, setRole] = useState<ShareRole>('viewer')
+
+  const sync = useQuery({ queryKey: queryKeys.sync, queryFn: () => window.api.sync.status() })
+  const outgoing = useQuery({
+    queryKey: queryKeys.sharesOutgoing,
+    queryFn: () => window.api.shares.outgoing(),
+  })
+  const incoming = useQuery({
+    queryKey: queryKeys.sharesIncoming,
+    queryFn: () => window.api.shares.incoming(),
+  })
+
+  useEffect(
+    () => window.api.on(IpcEvent.EventSharesChanged, () => void queryClient.invalidateQueries({ queryKey: queryKeys.shares })),
+    [queryClient],
+  )
+
+  const invalidate = (): void => void queryClient.invalidateQueries({ queryKey: queryKeys.shares })
+
+  const inviteMutation = useMutation({
+    mutationFn: () => window.api.shares.invite(memberEmail.trim(), role),
+    onSuccess: (share: Share) => {
+      invalidate()
+      setMemberEmail('')
+      push({
+        kind: 'success',
+        title: 'Invitación enviada',
+        body: `${share.memberEmail} · ${SHARE_ROLE_LABELS[share.role]}`,
+      })
+    },
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo invitar', body: error.message }),
+  })
+
+  const acceptMutation = useMutation({
+    mutationFn: (uid: string) => window.api.shares.accept(uid),
+    onSuccess: (share: Share) => {
+      invalidate()
+      push({ kind: 'success', title: 'Biblioteca aceptada', body: share.ownerEmail })
+    },
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo aceptar', body: error.message }),
+  })
+
+  const revokeMutation = useMutation({
+    mutationFn: (uid: string) => window.api.shares.revoke(uid),
+    onSuccess: (share: Share) => {
+      invalidate()
+      push({ kind: 'success', title: 'Acceso revocado', body: share.memberEmail })
+    },
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo revocar', body: error.message }),
+  })
+
+  const setRoleMutation = useMutation({
+    mutationFn: (payload: { uid: string; role: ShareRole }) => window.api.shares.setRole(payload.uid, payload.role),
+    onSuccess: (share: Share) => {
+      invalidate()
+      push({
+        kind: 'success',
+        title: 'Rol actualizado',
+        body: `${share.memberEmail} · ${SHARE_ROLE_LABELS[share.role]}`,
+      })
+    },
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo cambiar el rol', body: error.message }),
+  })
+
+  const authenticated = sync.data?.authenticated ?? false
+  const pending = (incoming.data ?? []).filter((s) => s.status === 'invited')
+  const activeOutgoing = (outgoing.data ?? []).filter((s) => s.status !== 'revoked')
+
+  if (!authenticated) {
+    return (
+      <div className="p-4">
+        <p className="text-sm text-muted-foreground">
+          Conecta una cuenta de sincronización para compartir tu biblioteca con otros usuarios.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4 p-4">
+      {pending.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Invitaciones recibidas</p>
+          {pending.map((share) => (
+            <div
+              key={share.uid}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{share.ownerEmail}</p>
+                <p className="text-xs text-muted-foreground">
+                  Te ha invitado a su biblioteca · {SHARE_ROLE_LABELS[share.role]}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => acceptMutation.mutate(share.uid)}
+                disabled={acceptMutation.isPending}
+              >
+                {acceptMutation.isPending ? <Spinner /> : <UserPlus />}
+                Aceptar
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {isAdmin ? (
+        <>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-0 flex-1 basis-56 space-y-1.5">
+              <Label htmlFor="share-email">Correo del usuario invitado</Label>
+              <Input
+                id="share-email"
+                type="email"
+                value={memberEmail}
+                onChange={(e) => setMemberEmail(e.target.value)}
+                placeholder="usuario@ejemplo.com"
+                disabled={inviteMutation.isPending}
+              />
+            </div>
+            <div className="min-w-0 flex-1 basis-40 space-y-1.5">
+              <Label htmlFor="share-role">Acceso</Label>
+              <Select
+                id="share-role"
+                value={role}
+                onChange={(e) => setRole(e.target.value as ShareRole)}
+              >
+                <option value="viewer">Solo lectura</option>
+                <option value="editor">Edición</option>
+              </Select>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => inviteMutation.mutate()}
+              disabled={!memberEmail.trim() || inviteMutation.isPending}
+            >
+              {inviteMutation.isPending ? <Spinner /> : <UserPlus />}
+              Invitar
+            </Button>
+          </div>
+
+          {activeOutgoing.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Compartida con</p>
+              {activeOutgoing.map((share) => {
+                const meta = SHARE_STATUS_META[share.status]
+                return (
+                  <div
+                    key={share.uid}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+                  >
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium">{share.memberEmail}</p>
+                      <Badge tone={meta.tone}>{meta.label}</Badge>
+                      <Badge tone={share.role === 'editor' ? 'info' : 'neutral'}>
+                        {SHARE_ROLE_LABELS[share.role]}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Select
+                        aria-label={`Rol de ${share.memberEmail}`}
+                        value={share.role}
+                        onChange={(e) =>
+                          setRoleMutation.mutate({ uid: share.uid, role: e.target.value as ShareRole })
+                        }
+                        className="w-36"
+                      >
+                        <option value="viewer">Solo lectura</option>
+                        <option value="editor">Edición</option>
+                      </Select>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Revocar acceso a ${share.memberEmail}`}
+                        disabled={revokeMutation.isPending}
+                        onClick={() => revokeMutation.mutate(share.uid)}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <UserX />
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Aún no compartes tu biblioteca. Invita a un usuario por correo para que pueda leerla
+              (o editarla) desde su dispositivo.
+            </p>
+          )}
+        </>
+      ) : null}
+    </div>
+  )
+}
+
 export function SettingsPage(): JSX.Element {
   const queryClient = useQueryClient()
   const push = useToasts((s) => s.push)
@@ -883,6 +1126,19 @@ export function SettingsPage(): JSX.Element {
           </p>
         </div>
         <SyncSection />
+      </section>
+
+      <section className="rounded-lg border bg-card">
+        <div className="border-b p-4">
+          <div className="flex items-center gap-2">
+            <Share2 className="size-4 text-muted-foreground" />
+            <h2 className="text-base font-semibold">Compartir</h2>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Invita a otros usuarios a acceder a tu biblioteca desde sus dispositivos.
+          </p>
+        </div>
+        <SharesSection />
       </section>
 
       <section className="rounded-lg border bg-card">

@@ -20,10 +20,13 @@ import {
   QaService,
   SearchService,
   SettingsService,
+  ShareService,
   SummarizeService,
   SyncService,
   TagService,
   SyncError,
+  type Share,
+  type ShareRole,
   type SyncChange,
   type SyncRemoteStore,
   type SyncStatus,
@@ -53,6 +56,7 @@ import {
   SqliteSecretStore,
   SqliteSessionRepository,
   SqliteSettingsRepository,
+  SqliteShareRepository,
   SqliteSourceRepository,
   SqliteTagRepository,
   SqliteUserRepository,
@@ -119,6 +123,17 @@ export interface AppRuntime {
   auth: SessionManager
   license: LicenseService
   sync: SyncService
+  shareService: ShareService
+  /** Compartición multiusuario: resuelve el correo de la cuenta conectada. */
+  shares: {
+    list(): Promise<Share[]>
+    invite(memberEmail: string, role: ShareRole): Promise<Share>
+    accept(uid: string): Promise<Share>
+    revoke(uid: string): Promise<Share>
+    setRole(uid: string, role: ShareRole): Promise<Share>
+    outgoing(): Promise<Share[]>
+    incoming(): Promise<Share[]>
+  }
   indexing: IndexingService
   ocrEngine: OCREngine | null
   watcher: FileWatcher
@@ -253,7 +268,13 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
   // peticiones se autentican como usuario de Supabase Auth (JWT) para que
   // RLS restringa los datos por `user_id`; la sesión vive cifrada en el
   // SecretStore y se renueva automáticamente al caducar.
-  const syncLocal = new SqliteSyncLocalStore(db, deviceId)
+  const syncLocal = new SqliteSyncLocalStore(db, deviceId, async () => {
+    try {
+      return (await getSupabaseSession()).userId
+    } catch {
+      return null
+    }
+  })
 
   const getSupabaseSession = async (): Promise<SupabaseSession> => {
     const settings = await syncLocal.getSettings()
@@ -305,6 +326,20 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
     },
   }
   const sync = new SyncService(syncLocal, syncRemote)
+
+  // Compartición multiusuario: el propietario es la cuenta Supabase conectada
+  // (settings.email). Sin cuenta no se puede compartir ni aceptar.
+  const shareService = new ShareService(new SqliteShareRepository(db))
+  const syncEmailOf = async (): Promise<string> => {
+    const settings = await syncLocal.getSettings()
+    if (!settings.email) {
+      throw new SyncError(
+        'Conecta una cuenta de sincronización para compartir tu biblioteca',
+        'ERR_SYNC_AUTH',
+      )
+    }
+    return settings.email
+  }
 
   // Auto-sync en segundo plano: sincroniza periódicamente si está habilitada,
   // sin bloquear otras operaciones. No lanza: solo registra el resultado.
@@ -498,6 +533,18 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
     auth,
     license,
     sync,
+    get shareService(): ShareService {
+      return shareService
+    },
+    shares: {
+      list: async () => shareService.list(),
+      invite: async (memberEmail, role) => shareService.invite(await syncEmailOf(), memberEmail, role),
+      accept: async (uid) => shareService.accept(await syncEmailOf(), uid),
+      revoke: async (uid) => shareService.revoke(await syncEmailOf(), uid),
+      setRole: async (uid, role) => shareService.setRole(await syncEmailOf(), uid, role),
+      outgoing: async () => shareService.outgoing(await syncEmailOf()),
+      incoming: async () => shareService.incoming(await syncEmailOf()),
+    },
     get classificationService(): ClassificationService {
       return classificationService
     },

@@ -10,7 +10,7 @@ import { z } from 'zod'
  * pueda detectar la eliminación.
  */
 
-export const syncEntitySchema = z.enum(['document', 'tag', 'assignment'])
+export const syncEntitySchema = z.enum(['document', 'tag', 'assignment', 'share'])
 export type SyncEntity = z.infer<typeof syncEntitySchema>
 
 export const syncOperationSchema = z.enum(['upsert', 'delete'])
@@ -23,6 +23,8 @@ export const syncChangeSchema = z.object({
   op: syncOperationSchema,
   updatedAtMs: z.number().int(),
   deviceId: z.string(),
+  /** `user_id` del propietario remoto; permite marcar filas de bibliotecas compartidas. */
+  ownerUserId: z.string().optional(),
   document: z
     .object({
       localId: z.number(),
@@ -54,6 +56,17 @@ export const syncChangeSchema = z.object({
     .object({
       documentId: z.number(),
       tagId: z.number(),
+    })
+    .optional(),
+  share: z
+    .object({
+      localId: z.number(),
+      uid: z.string(),
+      ownerEmail: z.string(),
+      memberEmail: z.string(),
+      role: z.string(),
+      status: z.string(),
+      createdAt: z.string().nullable(),
     })
     .optional(),
 })

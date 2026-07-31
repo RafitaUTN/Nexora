@@ -71,7 +71,7 @@ export class SyncService {
     const pending = await this.local.pending()
     if (pending.length > 0) {
       await this.remote.push(pending)
-      await this.local.markSynced(pending.map(keyOf))
+      await this.local.markSynced(pending)
     }
 
     const remoteChanges = await this.remote.pull(settings.lastPullMs)

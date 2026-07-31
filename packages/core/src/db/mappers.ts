@@ -6,6 +6,7 @@ import type {
   DocumentSummary,
   ExtractedEntity,
   HistoryEntry,
+  Share,
   Tag,
   TagStats,
 } from '@documind/domain'
@@ -30,6 +31,7 @@ export interface DocumentRow {
   added_at: string
   updated_at: string
   deleted_at: string | null
+  shared?: number
 }
 
 export function toDocument(row: DocumentRow): Document {
@@ -53,6 +55,7 @@ export function toDocument(row: DocumentRow): Document {
     addedAt: row.added_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
+    shared: row.shared === 1,
   }
 }
 
@@ -185,4 +188,28 @@ export interface EntityRow {
 
 export function toExtractedEntity(row: EntityRow): ExtractedEntity {
   return { kind: row.kind, value: row.value, confidence: row.confidence ?? 0 }
+}
+
+export interface ShareRow {
+  id: number
+  uid: string
+  owner_email: string
+  member_email: string
+  role: Share['role']
+  status: Share['status']
+  created_at: string
+  updated_at: string
+}
+
+export function toShare(row: ShareRow): Share {
+  return {
+    id: row.id,
+    uid: row.uid,
+    ownerEmail: row.owner_email,
+    memberEmail: row.member_email,
+    role: row.role,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
 }

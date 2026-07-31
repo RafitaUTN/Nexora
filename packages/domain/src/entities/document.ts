@@ -32,6 +32,8 @@ export const documentSchema = z.object({
   addedAt: z.string(),
   updatedAt: z.string(),
   deletedAt: z.string().nullable(),
+  /** 1 si la fila proviene de una biblioteca compartida (solo lectura local). */
+  shared: z.boolean().optional(),
 })
 export type Document = z.infer<typeof documentSchema>
 
