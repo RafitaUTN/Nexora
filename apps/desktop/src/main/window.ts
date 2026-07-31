@@ -9,7 +9,8 @@ const isDev = !!process.env['ELECTRON_RENDERER_URL']
 /** Política de seguridad de contenido: solo recursos locales y dev server. */
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  // En dev Vite inyecta scripts inline (preamble de @vitejs/plugin-react); en producción el build no lleva inline.
+  isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
