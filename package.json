@@ -17,7 +17,8 @@
     }
   },
   "scripts": {
-    "dev": "npm run dev -w apps/desktop",
+    "dev": "npm run dev:clean && npm run dev -w apps/desktop",
+    "dev:clean": "node scripts/dev-clean.mjs",
     "build": "npm run build -w apps/desktop",
     "build:win": "npm run build:win -w apps/desktop",
     "build:mac": "npm run build:mac -w apps/desktop",
