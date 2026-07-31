@@ -1,0 +1,50 @@
+appId: com.documind.desktop
+productName: DocuMind
+electronLanguages:
+  - es
+  - en-US
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**
+  - "!src/**"
+  - "!electron.vite.config.ts"
+asar: true
+npmRebuild: true
+compression: normal
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  differentialPackage: true
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: always
+  shortcutName: DocuMind
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.productivity
+  notarize: false
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Office
+  maintainer: DocuMind <dev@documind.app>
+  synopsis: Gestión inteligente de documentos
+
+publish:
+  provider: github
+  owner: documind
+  repo: documind-desktop

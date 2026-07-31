@@ -1,0 +1,44 @@
+# Dependencias
+node_modules/
+
+# Builds
+apps/desktop/out/
+apps/desktop/dist/
+dist/
+out/
+
+# Datos locales
+*.db
+*.db-wal
+*.db-shm
+data/
+.env
+.env.local
+*.local
+
+# Datos OCR (traineddata descargados por tesseract.js)
+*.traineddata
+
+# Cobertura y reportes
+coverage/
+*.lcov
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Empaquetado electron-builder
+*.exe
+*.msi
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+!packages/**/*.test.ts
