@@ -12,7 +12,7 @@ Objetivo: **+1M documentos indexados**, **+500 GB analizados**, miles de carpeta
 ## 2. Base de datos
 
 - **WAL + synchronous=NORMAL + foreign_keys=ON + busy_timeout**.
-- **Escritura single-writer**: una cola interna serializa INSERT/UPDATE (better-sqlite3 ya es síncrono y atómico por statement; los lotes se envuelven en transacciones explícitas).
+- **Escritura single-writer**: una cola interna serializa INSERT/UPDATE (node:sqlite ya es síncrono y atómico por statement; los lotes se envuelven en transacciones explícitas).
 - **Prepared statements** reutilizados (cache de statements) — nunca compilar SQL por invocación.
 - **Sin N+1**: los repositorios ofrecen consultas por lotes (batch get por ids, join de tags con `GROUP_CONCAT`, eager loading). Los casos de uso no iteran para hacer queries por fila.
 - **FTS5 external content**: el texto vive en `document_contents`; FTS solo índices, sin duplicar almacenamiento (~igual que el texto, no ×3).

@@ -20,7 +20,7 @@ export interface DocumentRepository {
   save(doc: Document): Promise<DocumentId>
 }
 // core/infra — adaptador
-export class SqliteDocumentRepository implements DocumentRepository { /* better-sqlite3 */ }
+export class SqliteDocumentRepository implements DocumentRepository { /* node:sqlite */ }
 ```
 
 ## Consecuencias

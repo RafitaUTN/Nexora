@@ -1,0 +1,15 @@
+export const queryKeys = {
+  documents: ['documents'] as const,
+  document: (id: number) => ['documents', id] as const,
+  stats: ['stats'] as const,
+  sources: ['sources'] as const,
+  tags: ['tags'] as const,
+  search: ['search'] as const,
+  settings: ['settings'] as const,
+  backups: ['backups'] as const,
+  system: ['system'] as const,
+  ocrHealth: ['ocr', 'health'] as const,
+  aiHealth: ['ai', 'health'] as const,
+  aiUsage: ['ai', 'usage'] as const,
+  apiKey: (provider: string) => ['ai', 'apiKey', provider] as const,
+}

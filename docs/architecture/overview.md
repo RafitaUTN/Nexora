@@ -25,7 +25,7 @@ graph TB
         PRE[Preload<br/>puente IPC tipado]
         RND[Renders React<br/>UI]
     end
-    MAIN --> DB[(SQLite<br/>better-sqlite3 + FTS5)]
+    MAIN --> DB[(SQLite<br/>node:sqlite + FTS5)]
     MAIN --> FS2[Filesystem<br/>escaneo/OCR/indexado]
     RND <-->|IPC sobre canales allowlist| PRE <-->|contextBridge| MAIN
 ```
@@ -121,7 +121,7 @@ El Event Bus es el único mecanismo de desacoplamiento entre módulos (patrón O
 
 ## 6. Decisiones de alto nivel
 
-1. **Electron sobre Tauri**: ecosistema maduro, Node para módulos nativos (better-sqlite3, Tesseract), tooling electron-vite/electron-builder sólido. Se documenta en ADR-0001.
+1. **Electron sobre Tauri**: ecosistema maduro, Node para worker_threads/Tesseract y `node:sqlite` built-in, tooling electron-vite/electron-builder sólido. Se documenta en ADR-0001.
 2. **SQLite + FTS5**: capacidad real de 1M+ filas indexadas con queries preparadas y escrituras en lotes; capa Repository permite migrar a Postgres/Supabase (ADR-0004).
 3. **IA desacoplada**: interfaz `AIProvider` + factoría por proveedor; OpenRouter como primer proveedor (ADR-0006).
 4. **Actualizaciones**: electron-updater con NSIS diferencial y verificación de firma (ADR-0008).

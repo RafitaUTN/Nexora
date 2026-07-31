@@ -1,0 +1,237 @@
+import { ipcMain, dialog, BrowserWindow } from 'electron'
+import type { EventBus } from '@documind/domain'
+import {
+  appSettingsSchema,
+  documentFilterSchema,
+  newSourceSchema,
+  newTagSchema,
+  providerIdSchema,
+} from '@documind/domain'
+import { IpcChannel, IpcEvent, APP_NAME, APP_VERSION } from '@documind/shared'
+import type { AppRuntime } from './runtime'
+import { dbPathOf } from './runtime'
+
+export interface IpcContext {
+  getRuntime(): AppRuntime
+  /** Reconstruye el runtime (tras restaurar un backup) y devuelve la nueva instancia. */
+  rebuildRuntime(): Promise<AppRuntime>
+}
+
+/** Convierte un error en un AppError serializable para IPC. */
+function codeOf(error: unknown): string {
+  if (error && typeof error === 'object' && 'code' in error) {
+    return String((error as { code: unknown }).code)
+  }
+  return 'ERR_UNKNOWN'
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * Registra todos los canales IPC del allowlist. Cada handler valida su
+ * entrada (zod), ejecuta el caso de uso y devuelve un Result tipado.
+ */
+export function registerIpc(context: IpcContext): void {
+  const handle = <Args extends unknown[], R>(
+    channel: string,
+    fn: (...args: Args) => Promise<R>,
+  ): void => {
+    ipcMain.handle(channel, async (_event, ...args: Args) => {
+      try {
+        return { ok: true as const, data: await fn(...args) }
+      } catch (error) {
+        return { ok: false as const, error: { code: codeOf(error), message: messageOf(error) } }
+      }
+    })
+  }
+
+  const rt = (): AppRuntime => context.getRuntime()
+
+  // System
+  handle(IpcChannel.SystemInfo, async () => ({
+    name: APP_NAME,
+    version: APP_VERSION,
+    platform: process.platform,
+    arch: process.arch,
+  }))
+  handle(IpcChannel.SystemPing, async () => ({ pong: true }))
+
+  // Dialog (selector nativo de carpeta/archivo para añadir fuentes)
+  const dialogHandle = (
+    channel: string,
+    options: { title: string; properties: Array<'openDirectory' | 'openFile' | 'createDirectory'> },
+  ): void => {
+    ipcMain.handle(channel, async (event) => {
+      try {
+        const win = BrowserWindow.fromWebContents(event.sender)
+        const dialogOptions = {
+          title: options.title,
+          properties: options.properties,
+          buttonLabel: 'Seleccionar',
+        }
+        const result = win
+          ? await dialog.showOpenDialog(win, dialogOptions)
+          : await dialog.showOpenDialog(dialogOptions)
+        return {
+          ok: true as const,
+          data: result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0],
+        }
+      } catch (error) {
+        return { ok: false as const, error: { code: codeOf(error), message: messageOf(error) } }
+      }
+    })
+  }
+  dialogHandle(IpcChannel.DialogSelectFolder, {
+    title: 'Seleccionar carpeta',
+    properties: ['openDirectory', 'createDirectory'],
+  })
+  dialogHandle(IpcChannel.DialogSelectFile, {
+    title: 'Seleccionar archivo',
+    properties: ['openFile'],
+  })
+
+  // Documents
+  handle(IpcChannel.DocumentsList, async (filter) =>
+    rt().documentService.list(documentFilterSchema.parse(filter ?? {})),
+  )
+  handle(IpcChannel.DocumentsGet, async (id: number) => {
+    const document = await rt().repos.documents.findById(id)
+    if (!document) return null
+    const content = await rt().repos.documents.getContent(id)
+    const tags = await rt().repos.tags.listByDocument(id)
+    const classification = await rt().repos.classifications.findByDocumentId(id)
+    return { document, content, tags, classification }
+  })
+  handle(IpcChannel.DocumentsDelete, async (id: number) => {
+    await rt().documentService.remove(id)
+    return { id }
+  })
+  handle(IpcChannel.DocumentsStats, async () => rt().documentService.stats())
+
+  // Sources
+  handle(IpcChannel.SourcesList, async () => rt().repos.sources.list())
+  handle(IpcChannel.SourcesAdd, async (input) => {
+    const source = await rt().repos.sources.add(newSourceSchema.parse(input))
+    await rt().refreshServices()
+    return source
+  })
+  handle(IpcChannel.SourcesRemove, async (id: number) => {
+    await rt().repos.sources.remove(id)
+    await rt().refreshServices()
+    return { id }
+  })
+  handle(IpcChannel.SourcesRescan, async (id: number) => rt().scanSource(id))
+
+  // Search
+  handle(IpcChannel.SearchQuery, async (payload) => {
+    const { query, limit, filter } = payload as {
+      query: string
+      limit?: number
+      filter?: { ext?: string; tagId?: number }
+    }
+    return rt().searchService.fullText(query, limit ?? 50, filter)
+  })
+
+  // Tags
+  handle(IpcChannel.TagsList, async () => rt().tagService.listWithStats())
+  handle(IpcChannel.TagsCreate, async (input) =>
+    rt().tagService.create(newTagSchema.parse(input)),
+  )
+  handle(IpcChannel.TagsAssign, async (payload: { tagId: number; documentId: number }) => {
+    await rt().tagService.assign(payload.tagId, payload.documentId)
+    return { ok: true }
+  })
+  handle(IpcChannel.TagsRemove, async (payload: { tagId: number; documentId: number }) => {
+    await rt().tagService.unassign(payload.tagId, payload.documentId)
+    return { ok: true }
+  })
+  handle(IpcChannel.TagsDelete, async (id: number) => {
+    await rt().tagService.delete(id)
+    return { id }
+  })
+
+  // AI
+  handle(IpcChannel.AiClassify, async (documentId: number) =>
+    rt().classificationService.classify(documentId),
+  )
+  handle(IpcChannel.AiUsage, async () => rt().repos.aiUsage.summarize())
+  handle(IpcChannel.AiHealth, async () => {
+    const provider = await rt().getProvider()
+    if (!provider) return { ok: false, latencyMs: 0, error: 'IA no configurada' }
+    return provider.health()
+  })
+  handle(IpcChannel.AiSetApiKey, async (payload: { provider: string; apiKey: string }) => {
+    const provider = providerIdSchema.parse(payload.provider)
+    if (payload.apiKey.trim().length < 8) {
+      throw new Error('La clave API es demasiado corta')
+    }
+    await rt().saveApiKey(provider, payload.apiKey.trim())
+    return { provider }
+  })
+  handle(IpcChannel.AiDeleteApiKey, async (payload: { provider: string }) => {
+    const provider = providerIdSchema.parse(payload.provider)
+    await rt().deleteApiKey(provider)
+    return { provider }
+  })
+  handle(IpcChannel.AiApiKeyStatus, async (payload: { provider: string }) => {
+    const provider = providerIdSchema.parse(payload.provider)
+    return { provider, set: await rt().hasApiKey(provider) }
+  })
+
+  // OCR
+  handle(IpcChannel.OcrHealth, async () => {
+    const engine = rt().ocrEngine
+    if (!engine) return { ok: false, engine: 'none', error: 'OCR no disponible' }
+    return engine.health()
+  })
+
+  // Settings
+  handle(IpcChannel.SettingsGet, async () => rt().settingsService.get())
+  handle(IpcChannel.SettingsSet, async (patch) => {
+    const settings = appSettingsSchema.parse(patch)
+    const updated = await rt().settingsService.update(settings)
+    await rt().refreshServices()
+    return updated
+  })
+
+  // Backups
+  handle(IpcChannel.BackupsCreate, async () => {
+    rt().db.checkpoint()
+    return rt().backups.create(dbPathOf(rt().userDataPath))
+  })
+  handle(IpcChannel.BackupsList, async () => rt().backups.list())
+  handle(IpcChannel.BackupsRestore, async (name: string) => {
+    await rt().restoreBackup(name)
+    await context.rebuildRuntime()
+    return { ok: true }
+  })
+
+  // Updates
+  handle(IpcChannel.UpdatesCheck, async () => rt().updates.check())
+  handle(IpcChannel.UpdatesInstall, async () => {
+    await rt().updates.install()
+    return { ok: true }
+  })
+  handle(IpcChannel.UpdatesState, async () => rt().updates.getState())
+}
+
+/** Reenvía los eventos del dominio al renderer por los canales IpcEvent. */
+export function wireEvents(bus: EventBus, getWindow: () => BrowserWindow | null): () => void {
+  const send = (channel: string, payload: unknown): void => {
+    const win = getWindow()
+    if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
+  }
+  const subs = [
+    bus.on('document:added', (p) => send(IpcEvent.EventDocumentIndexed, p)),
+    bus.on('document:indexed', (p) => send(IpcEvent.EventDocumentIndexed, p)),
+    bus.on('document:status', (p) => send(IpcEvent.EventDocumentStatus, p)),
+    bus.on('index:progress', (p) => send(IpcEvent.EventIndexProgress, p)),
+    bus.on('ocr:progress', (p) => send(IpcEvent.EventOcrProgress, p)),
+    bus.on('ai:progress', (p) => send(IpcEvent.EventAiProgress, p)),
+    bus.on('notification', (p) => send(IpcEvent.EventNotification, p)),
+    bus.on('automation:run', (p) => send(IpcEvent.EventAutomationRun, p)),
+  ]
+  return () => subs.forEach((unsub) => unsub())
+}

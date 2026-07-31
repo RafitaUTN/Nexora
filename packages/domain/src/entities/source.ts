@@ -2,6 +2,8 @@ import { z } from 'zod'
 
 export const sourceKindSchema = z.enum(['folder', 'file'])
 export const scanModeSchema = z.enum(['recursive', 'flat'])
+export type SourceKind = z.infer<typeof sourceKindSchema>
+export type ScanMode = z.infer<typeof scanModeSchema>
 
 export const sourceSchema = z.object({
   id: z.number(),

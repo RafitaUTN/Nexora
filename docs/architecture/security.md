@@ -25,7 +25,7 @@ Alcance: proteger los documentos del cliente (facturas, contratos, datos persona
 |---|---|
 | Path traversal | Toda ruta pasa por `safeResolve(root, userPath)`: normaliza con `path.resolve`, verifica que esté dentro de la raíz permitida, rechaza `..` y bloquea accesos fuera. |
 | Command injection | No se ejecutan comandos del sistema con entrada de usuario. Si algún día se necesita, se usaría `spawn` con array de args (sin shell). |
-| SQL injection | 100% statements preparados (better-sqlite3). |
+| SQL injection | 100% statements preparados (node:sqlite). |
 | XSS | React escapa por defecto; contenido de documentos se renderiza como texto plano; CSP estricta sin `eval` en producción. |
 | Prototype pollution | Schemas **Zod** en todo el IPC; helpers propios inmutables; `Object.freeze` en constantes compartidas. |
 | MIME/extensión engañosos | Validación por extensión permitida **y** `mime` detectado por contenido (firma de bytes) para la ingesta. |
@@ -45,5 +45,5 @@ Tabla `audit_log` registra: importar/eliminar claves, restaurar backups, mover/r
 - Dependabot + Renovate para CVEs.
 - CodeQL y secret scanning en CI.
 - `npm audit` en CI (fail on high).
-- Menor superficie: se minimizan dependencias; módulos nativos solo `better-sqlite3`.
+- Menor superficie: se minimizan dependencias; SQLite es `node:sqlite` (built-in, sin binarios nativos).
 - Secrets nunca en el repo; se pasan por variables de entorno de CI (firma, notarización).

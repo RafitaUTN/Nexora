@@ -19,6 +19,10 @@ export default defineConfig({
     resolve: { alias: workspaceAliases },
     build: {
       rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          'tesseract-worker': resolve(__dirname, '../../packages/ocr/src/engine/tesseract-worker.ts'),
+        },
         output: {
           inlineDynamicImports: false,
         },
@@ -28,6 +32,14 @@ export default defineConfig({
   preload: {
     plugins: [externalizeDepsPlugin()],
     resolve: { alias: workspaceAliases },
+    build: {
+      rollupOptions: {
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].cjs',
+        },
+      },
+    },
   },
   renderer: {
     resolve: {

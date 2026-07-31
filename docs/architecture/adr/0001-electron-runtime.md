@@ -16,6 +16,6 @@ Se necesita una aplicación de escritorio multiplataforma (Windows, Linux, macOS
 Usar **Electron** con **electron-vite** (build) y **electron-builder** (empaquetado).
 
 ## Consecuencias
-- El proceso principal ejecuta Node real: podemos usar `better-sqlite3`, `worker_threads`, `node:crypto` y `fetch` nativo.
+- El proceso principal ejecuta Node real: podemos usar `node:sqlite`, `worker_threads`, `node:crypto` y `fetch` nativo.
 - Se exige disciplina de seguridad (contextIsolation, sandbox, IPC allowlist) — ADR-0009.
 - El tamaño del instalador (~90–120 MB) es aceptable para software comercial de gestión documental.

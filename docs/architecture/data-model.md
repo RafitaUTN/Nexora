@@ -1,6 +1,6 @@
 # Modelo de datos
 
-Base local: **SQLite** (`better-sqlite3`), `PRAGMA journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`. Las migraciones son versionadas (`schema_migrations`) y viven en `packages/core/db/migrations/`.
+Base local: **SQLite** (`node:sqlite` built-in), `PRAGMA journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`. Las migraciones son versionadas (`schema_migrations`) y viven en `packages/core/db/migrations/`.
 
 ## Diagrama entidad-relación
 

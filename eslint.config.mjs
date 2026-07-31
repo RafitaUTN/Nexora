@@ -47,6 +47,7 @@ export default [
     plugins: { '@typescript-eslint': tseslint },
     rules: {
       ...tseslint.configs.recommended.rules,
+      'no-undef': 'off',
       'no-redeclare': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
@@ -79,6 +80,12 @@ export default [
     rules: {
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+    },
+  },
+  {
+    files: ['apps/desktop/src/renderer/src/main.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
     },
   },
   prettier,

@@ -12,7 +12,7 @@ La app manipula documentos personales de PYMES (facturas, contratos, datos de cl
 4. **CSP estricta** (meta + header) para el renderer: `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'` (Tailwind necesita inline en dev) — sin `eval` en producción.
 5. **Cifrado de secretos**: claves API cifradas con **AES-256-GCM** (`node:crypto`, clave derivada de un secreto máquina + passphrase del usuario) en `SecretStore`; nunca en disco en claro.
 6. **Path traversal / command injection**: toda ruta de usuario se normaliza (`path.resolve`), se valida contra la raíz permitida y se bloquean accesos fuera de ella; no se ejecutan comandos del sistema con entradas de usuario.
-7. **SQL injection**: statements preparados (better-sqlite3) en todos los repositorios; nunca concatenación de strings.
+7. **SQL injection**: statements preparados (node:sqlite) en todos los repositorios; nunca concatenación de strings.
 8. **XSS**: React escapa por defecto; se sanitizan textos HTML de documentos si se renderizan como HTML (no previsto; solo texto plano).
 9. **Prototype pollution**: utilidades propias inmutables; entradas JSON del IPC validadas con Zod; `Object.freeze` en constantes.
 10. **Logs seguros**: se redactan secretos/tokens en el logger (`redact: ['apiKey','authorization']`).

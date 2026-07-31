@@ -7,6 +7,10 @@ export const IpcChannel = {
   SystemInfo: 'system:info',
   SystemPing: 'system:ping',
 
+  // Dialog (selección de carpetas/archivos)
+  DialogSelectFolder: 'dialog:selectFolder',
+  DialogSelectFile: 'dialog:selectFile',
+
   // Documents
   DocumentsList: 'documents:list',
   DocumentsGet: 'documents:get',
@@ -33,6 +37,9 @@ export const IpcChannel = {
   AiClassify: 'ai:classify',
   AiUsage: 'ai:usage',
   AiHealth: 'ai:health',
+  AiSetApiKey: 'ai:setApiKey',
+  AiDeleteApiKey: 'ai:deleteApiKey',
+  AiApiKeyStatus: 'ai:apiKeyStatus',
 
   // OCR
   OcrHealth: 'ocr:health',

@@ -43,5 +43,5 @@ packages/shared       → tipos + schemas Zod compartidos
 - Tests junto al código: `*.test.ts`.
 
 ## Módulos nativos
-- `better-sqlite3` se reconstruye para el ABI de Electron con `npm run rebuild`.
-- Si cambias la versión de Electron: `npm run rebuild`.
+- SQLite usa `node:sqlite` (built-in de Node): sin módulos nativos de ABI específico ni `npm run rebuild` para Electron.
+- Los módulos N-API (`sharp`, `@napi-rs/canvas`) no requieren rebuild.
