@@ -826,13 +826,18 @@ export function SettingsPage(): JSX.Element {
   const push = useToasts((s) => s.push)
 
   const settings = useQuery({ queryKey: queryKeys.settings, queryFn: () => window.api.settings.get() })
-  const [form, setForm] = useState<SettingsForm | null>(null)
+  const [form, setForm] = useState<SettingsForm | null>(() =>
+    settings.data ? toForm(settings.data) : null,
+  )
+  const [prevSettings, setPrevSettings] = useState<AppSettings | null>(settings.data ?? null)
   const [dirty, setDirty] = useState(false)
-  const [lastData, setLastData] = useState<AppSettings | undefined>(settings.data)
 
-  if (settings.data !== lastData && !dirty) {
-    setLastData(settings.data)
-    setForm(settings.data ? toForm(settings.data) : null)
+  // Sincroniza el formulario cuando llegan los ajustes (o cambian tras un
+  // guardado) sin pisar una edición en curso. Es "adjust state during render",
+  // el patrón oficial de React para derivar estado de un prop.
+  if (settings.data && !dirty && prevSettings !== settings.data) {
+    setPrevSettings(settings.data)
+    setForm(toForm(settings.data))
   }
 
   const set = <K extends keyof SettingsForm>(key: K, value: SettingsForm[K]): void => {

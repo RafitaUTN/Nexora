@@ -17,6 +17,7 @@ import type { NewUser, Role, User } from '../entities/user'
 export interface DocumentRepository {
   save(doc: NewDocument): Promise<Document>
   updateStatus(id: number, status: Document['status']): Promise<void>
+  updateTitle(id: number, title: string | null): Promise<void>
   updateContentPreview(id: number, preview: string): Promise<void>
   setDuplicate(id: number, duplicateOf: number): Promise<void>
   findById(id: number): Promise<Document | null>

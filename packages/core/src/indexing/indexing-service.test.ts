@@ -84,6 +84,99 @@ describe('IndexingService', () => {
     expect(bus.eventsOf('document:status')).toHaveLength(1)
   })
 
+  it('deriva el título desde metadata o desde la primera línea', async () => {
+    const withMetaExtraction: TextExtractor = {
+      async extract(_buffer: Uint8Array, _filename: string): Promise<ExtractedDocument> {
+        return { text: 'texto plano', metadata: { mimeType: 'application/pdf', title: 'Informe de prueba' } }
+      },
+    }
+    const { service, documents } = makeService({ extraction: withMetaExtraction })
+    const withMeta = await service.indexFile({
+      sourceId: null,
+      path: '/informe.pdf',
+      filename: 'informe.pdf',
+      buffer: new Uint8Array(3),
+      mtimeMs: 0,
+    })
+    const customExtraction: TextExtractor = {
+      async extract(): Promise<ExtractedDocument> {
+        return { text: 'Factura #001\nSegunda línea', metadata: { mimeType: 'text/plain' } }
+      },
+    }
+    const { service: svc2, documents: docs2 } = makeService({ extraction: customExtraction })
+    const fromText = await svc2.indexFile({
+      sourceId: null,
+      path: '/f.txt',
+      filename: 'f.txt',
+      buffer: new Uint8Array(3),
+      mtimeMs: 0,
+    })
+    expect((await documents.findById(withMeta.id))?.title).toBe('Informe de prueba')
+    expect((await docs2.findById(fromText.id))?.title).toBe('Factura #001')
+  })
+
+  it('reindexa un archivo ya registrado sin duplicarlo y versiona si cambió', async () => {
+    const { service, documents } = makeService()
+    const first = await service.indexFile({
+      sourceId: 1,
+      path: '/a.txt',
+      filename: 'a.txt',
+      buffer: new Uint8Array(3),
+      mtimeMs: 0,
+    })
+    const second = await service.indexFile({
+      sourceId: 1,
+      path: '/a.txt',
+      filename: 'a.txt',
+      buffer: new Uint8Array(3),
+      mtimeMs: 0,
+    })
+    expect(second.id).toBe(first.id)
+    expect(documents.docs).toHaveLength(1)
+    expect((await documents.findById(first.id))?.status).toBe('ready')
+    expect(documents.versions).toHaveLength(0)
+  })
+
+  it('versiona y notifica si el archivo cambió en el rescan', async () => {
+    const documents = new FakeDocumentRepository()
+    const bus = new FakeEventBus()
+    const changedExtraction: TextExtractor = {
+      async extract(buffer: Uint8Array, _filename: string): Promise<ExtractedDocument> {
+        const size = buffer.byteLength
+        return {
+          text: 'nuevo contenido',
+          metadata: { mimeType: 'text/plain', size, hash: `h-${size}` },
+        }
+      },
+    }
+    const service = new IndexingService({
+      extraction: changedExtraction,
+      documents,
+      ocrQueue: fakeQueue(),
+      classifier: { classify: async () => null } as never,
+      ocrEngine,
+      bus,
+      settings: () => makeSettings({ ai: { ...makeSettings().ai, provider: null } }),
+    })
+    const first = await service.indexFile({
+      sourceId: 1,
+      path: '/b.txt',
+      filename: 'b.txt',
+      buffer: new Uint8Array(3),
+      mtimeMs: 0,
+    })
+    const second = await service.indexFile({
+      sourceId: 1,
+      path: '/b.txt',
+      filename: 'b.txt',
+      buffer: new Uint8Array(9),
+      mtimeMs: 0,
+    })
+    expect(second.id).toBe(first.id)
+    expect(documents.versions).toHaveLength(1)
+    expect((await documents.findById(first.id))?.title).toBe('nuevo contenido')
+  })
+
   it('encola OCR si no hay texto y emite el estado', async () => {
     const { service, bus } = makeService()
     const doc = await service.indexFile({

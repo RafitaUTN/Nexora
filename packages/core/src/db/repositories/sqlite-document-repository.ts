@@ -63,6 +63,12 @@ export class SqliteDocumentRepository implements DocumentRepository {
       .run(status, id)
   }
 
+  async updateTitle(id: number, title: string | null): Promise<void> {
+    this.db
+      .prepare(`UPDATE documents SET title = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(title, id)
+  }
+
   async updateContentPreview(id: number, preview: string): Promise<void> {
     this.db
       .prepare(
@@ -150,8 +156,8 @@ export class SqliteDocumentRepository implements DocumentRepository {
       .prepare(
         `SELECT
            COUNT(*) AS total,
-           SUM(CASE WHEN status = 'indexed' THEN 1 ELSE 0 END) AS indexed,
-           SUM(CASE WHEN status IN ('pending','extracting','ocr','ai') THEN 1 ELSE 0 END) AS pending,
+           SUM(CASE WHEN status IN ('indexed','ready') THEN 1 ELSE 0 END) AS indexed,
+           SUM(CASE WHEN status IN ('pending','extracting','ocr','pending_ocr','ai') THEN 1 ELSE 0 END) AS pending,
            SUM(CASE WHEN is_duplicate_of IS NOT NULL THEN 1 ELSE 0 END) AS duplicates,
            SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS errors,
            COALESCE(SUM(size_bytes), 0) AS total_size

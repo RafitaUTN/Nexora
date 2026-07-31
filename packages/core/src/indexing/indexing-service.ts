@@ -50,19 +50,45 @@ export class IndexingService {
     const extracted = await this.deps.extraction.extract(input.buffer, input.filename, {
       ocrScannedPdf: true,
     })
-    const { mimeType, hash } = extracted.metadata
+    const { mimeType, hash, title } = extracted.metadata
+    const hashValue = typeof hash === 'string' ? hash : ''
 
-    const doc = await this.deps.documents.save({
-      sourceId: input.sourceId,
-      path: input.path,
-      filename: input.filename,
-      ext,
-      mimeType: mimeType ?? null,
-      sizeBytes: input.buffer.byteLength,
-      hashSha256: typeof hash === 'string' ? hash : '',
-      fileMtimeMs: input.mtimeMs,
-    })
-    await this.deps.documents.addHistory({ documentId: doc.id, action: 'created' })
+    const existing = await this.deps.documents.findByPath(input.sourceId, input.path)
+    let doc: Document
+    if (existing) {
+      doc = existing
+      if (
+        existing.hashSha256 !== hashValue ||
+        existing.sizeBytes !== input.buffer.byteLength
+      ) {
+        const newVersion = await this.deps.documents.bumpVersion(doc.id)
+        await this.deps.documents.addVersion(
+          doc.id,
+          newVersion,
+          doc.path,
+          doc.hashSha256,
+          doc.sizeBytes,
+          'Versión previa antes de cambio',
+        )
+        await this.deps.documents.addHistory({
+          documentId: doc.id,
+          action: 'updated',
+          detail: `Cambio detectado (v${newVersion})`,
+        })
+      }
+    } else {
+      doc = await this.deps.documents.save({
+        sourceId: input.sourceId,
+        path: input.path,
+        filename: input.filename,
+        ext,
+        mimeType: mimeType ?? null,
+        sizeBytes: input.buffer.byteLength,
+        hashSha256: hashValue,
+        fileMtimeMs: input.mtimeMs,
+      })
+      await this.deps.documents.addHistory({ documentId: doc.id, action: 'created' })
+    }
 
     const needsOcr = !extracted.text.trim() && (extracted.images ?? []).length > 0
     if (needsOcr) {
@@ -76,7 +102,7 @@ export class IndexingService {
       return doc
     }
 
-    await this.finishIndexing(doc.id, extracted.text)
+    await this.finishIndexing(doc.id, extracted.text, title)
     return doc
   }
 
@@ -123,11 +149,15 @@ export class IndexingService {
     }
   }
 
-  private async finishIndexing(documentId: number, text: string): Promise<void> {
+  private async finishIndexing(documentId: number, text: string, title?: string): Promise<void> {
     if (text.trim()) {
       await this.deps.documents.setContent(documentId, text)
       const preview = text.trim().slice(0, 300)
       await this.deps.documents.updateContentPreview(documentId, preview)
+    }
+    const resolvedTitle = (title?.trim() || text.trim().split('\n').find((l) => l.trim())?.trim() || null)
+    if (resolvedTitle) {
+      await this.deps.documents.updateTitle(documentId, resolvedTitle.slice(0, 255))
     }
     await this.deps.documents.updateStatus(documentId, 'ready')
     this.deps.bus.emit('document:indexed', { documentId })

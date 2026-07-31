@@ -35,7 +35,12 @@ function codeOf(error: unknown): string {
   return 'ERR_UNKNOWN'
 }
 
+/** Mensaje legible: para ZodError usa el primer issue (texto amigable, no el JSON crudo). */
 function messageOf(error: unknown): string {
+  if (error && typeof error === 'object' && Array.isArray((error as { issues?: unknown[] }).issues)) {
+    const first = (error as { issues: { message?: string }[] }).issues[0]
+    if (first?.message) return first.message
+  }
   return error instanceof Error ? error.message : String(error)
 }
 

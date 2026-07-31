@@ -68,12 +68,10 @@ export const migrations: Migration[] = [
                 new.content);
       END;
       CREATE TRIGGER IF NOT EXISTS documents_fts_ad AFTER DELETE ON document_contents BEGIN
-        INSERT INTO documents_fts(documents_fts, rowid, title, content)
-        VALUES('delete', old.document_id, old.content, old.content);
+        DELETE FROM documents_fts WHERE rowid = old.document_id;
       END;
       CREATE TRIGGER IF NOT EXISTS documents_fts_au AFTER UPDATE ON document_contents BEGIN
-        INSERT INTO documents_fts(documents_fts, rowid, title, content)
-        VALUES('delete', old.document_id, old.content, old.content);
+        DELETE FROM documents_fts WHERE rowid = old.document_id;
         INSERT INTO documents_fts(rowid, title, content)
         VALUES (new.document_id,
                 (SELECT title FROM documents WHERE id = new.document_id),
@@ -462,6 +460,28 @@ export const migrations: Migration[] = [
         updated_at_ms INTEGER NOT NULL,
         PRIMARY KEY (entity, entity_key)
       );
+    `,
+  },
+  {
+    version: 11,
+    name: 'fix_fts_delete_triggers',
+    up: `
+      -- SQLite 3.53 (Node 24 / Electron 43) rompe el comando especial 'delete'
+      -- de FTS5 usado por los triggers anteriores, que fallaba con
+      -- "SQL logic error" al reindexar (UPDATE/DELETE de document_contents).
+      -- Se reemplaza por un DELETE normal por rowid + re-INSERT.
+      DROP TRIGGER IF EXISTS documents_fts_ad;
+      DROP TRIGGER IF EXISTS documents_fts_au;
+      CREATE TRIGGER documents_fts_ad AFTER DELETE ON document_contents BEGIN
+        DELETE FROM documents_fts WHERE rowid = old.document_id;
+      END;
+      CREATE TRIGGER documents_fts_au AFTER UPDATE ON document_contents BEGIN
+        DELETE FROM documents_fts WHERE rowid = old.document_id;
+        INSERT INTO documents_fts(rowid, title, content)
+        VALUES (new.document_id,
+                (SELECT title FROM documents WHERE id = new.document_id),
+                new.content);
+      END;
     `,
   },
 ]

@@ -172,6 +172,32 @@ describe('integración SQLite', () => {
     expect(stats.total).toBe(1)
   })
 
+  it('setContent reindexa sobre el mismo documento sin errores de FTS', async () => {
+    const db = freshDb()
+    const docs = new SqliteDocumentRepository(db)
+    const search = new SqliteSearchRepository(db)
+    const doc = await docs.save({
+      sourceId: null,
+      path: '/reindex.pdf',
+      filename: 'reindex.pdf',
+      ext: 'pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 10,
+      hashSha256: 'hash-reindex',
+      fileMtimeMs: null,
+    })
+    await docs.setContent(doc.id, 'Primera versión del contrato')
+    await docs.updateTitle(doc.id, 'Contrato 1')
+    await docs.setContent(doc.id, 'Segunda versión del contrato')
+    await docs.updateTitle(doc.id, 'Contrato 2')
+
+    const hits = await search.fullText('segunda', 10)
+    expect(hits).toHaveLength(1)
+    expect(hits[0]?.document.filename).toBe('reindex.pdf')
+    const stale = await search.fullText('primera', 10)
+    expect(stale.some((h) => h.document.id === doc.id)).toBe(false)
+  })
+
   it('search repo: tokens vacíos devuelven [] y filtros ext/tagId', async () => {
     const db = freshDb()
     const docs = new SqliteDocumentRepository(db)

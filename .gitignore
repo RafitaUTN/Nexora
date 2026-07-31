@@ -39,6 +39,9 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
+# opencode (artefactos de sesión)
+.opencode/
+
 # Empaquetado electron-builder
 *.exe
 *.msi

@@ -221,6 +221,11 @@ export class FakeDocumentRepository implements DocumentRepository {
     if (found) found.status = status
   }
 
+  async updateTitle(id: number, title: string | null): Promise<void> {
+    const found = this.docs.find((d) => d.id === id)
+    if (found) found.title = title
+  }
+
   async updateContentPreview(id: number, preview: string): Promise<void> {
     const found = this.docs.find((d) => d.id === id)
     if (found) found.contentPreview = preview
