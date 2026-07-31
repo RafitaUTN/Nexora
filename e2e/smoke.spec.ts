@@ -93,7 +93,16 @@ test('smoke: abrir la app, escanear una carpeta y buscar', async () => {
     await page.getByPlaceholder('Buscar por contenido…').fill('998877')
     await expect(page.getByText(/coincidencia/)).toBeVisible({ timeout: 15_000 })
     await expect(docRow).toBeVisible()
-  } finally {
+
+    // Búsqueda global (Ctrl/Cmd+K): abre el overlay, busca el documento y navega a él.
+    await page.keyboard.press('Control+k')
+    const searchInput = page.getByPlaceholder('Buscar documentos, páginas y acciones…')
+    await expect(searchInput).toBeVisible()
+    await searchInput.fill('998877')
+    const hit = page.getByRole('option').filter({ hasText: filename }).first()
+    await expect(hit).toBeVisible({ timeout: 15_000 })
+    await hit.click()
+    await expect(page.getByText(filename).first()).toBeVisible({ timeout: 15_000 })  } finally {
     await app.close()
   }
 })

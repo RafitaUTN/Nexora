@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
+import { IpcEvent } from '@documind/shared'
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
 import { DragDropLayer } from './drag-drop-layer'
@@ -19,8 +20,12 @@ export function AppShell(): JSX.Element {
         navigate('/settings')
       }
     }
+    const unsubscribeGlobal = window.api.on(IpcEvent.EventGlobalSearch, () => setPaletteOpen(true))
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      unsubscribeGlobal()
+    }
   }, [navigate])
 
   return (

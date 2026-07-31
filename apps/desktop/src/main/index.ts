@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow, safeStorage } from 'electron'
+import { app, BrowserWindow, globalShortcut, safeStorage } from 'electron'
 import { randomHex } from '@documind/core'
 import { ConsoleLogger } from '@documind/core'
 import { IpcEvent } from '@documind/shared'
@@ -18,6 +18,20 @@ let mainWindow: BrowserWindow | null = null
 let runtime: AppRuntime | null = null
 let unsubscribeEvents: (() => void) | null = null
 let unsubscribeUpdates: (() => void) | null = null
+
+/** Atajo global (estilo Raycast/Spotlight) que abre la búsqueda en cualquier app. */
+const GLOBAL_SEARCH_SHORTCUT = 'CommandOrControl+Shift+Space'
+
+function registerGlobalSearch(): boolean {
+  return globalShortcut.register(GLOBAL_SEARCH_SHORTCUT, () => {
+    const win = mainWindow
+    if (!win || win.isDestroyed()) return
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+    win.webContents.send(IpcEvent.EventGlobalSearch, undefined)
+  })
+}
 
 /** Reenvía el estado de actualizaciones al renderer. */
 function wireUpdates(): void {
@@ -98,6 +112,10 @@ if (!gotTheLock) {
     void runtime?.dispose().catch(() => undefined)
   })
 
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll()
+  })
+
   void app.whenReady().then(async () => {
     try {
       app.setAppUserModelId('com.documind.desktop')
@@ -121,6 +139,11 @@ if (!gotTheLock) {
       unsubscribeEvents = wireEvents(runtime.bus, () => mainWindow)
       wireUpdates()
       mainWindow = createMainWindow()
+      if (!registerGlobalSearch()) {
+        console.warn(
+          `[documind] no se pudo registrar el atajo global de búsqueda (${GLOBAL_SEARCH_SHORTCUT})`,
+        )
+      }
     } catch (error) {
       console.error('[documind] arranque fallido:', error)
       app.exit(1)

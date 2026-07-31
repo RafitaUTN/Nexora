@@ -99,5 +99,11 @@
 - UI: sección «Licencia» en Configuración (badge de estado/plan, activar con clave, desactivar admin-only).
 - Verificación: 199 tests, cobertura 92.37/82.98/91.8/94.03; typecheck, lint y build OK.
 
+### FASE 12 — Búsqueda global (Raycast-style)
+- Atajo global de sistema con `globalShortcut` (`Ctrl/Cmd+Shift+Espacio`) que enfoca la ventana y emite `event:globalSearch`; también se abre en-app con `Ctrl/Cmd+K`.
+- `CommandPalette` extendido: busca documentos indexados en vivo (FTS vía `search:query`, `useDeferredValue` como debounce), muestra título/ruta/score y navega a `/documents/:id`; conserva las páginas y acciones (tema).
+- Evento `EventGlobalSearch` en `IpcEvent`; suscripción en `AppShell`.
+- E2E ampliado: abre el overlay con Ctrl+K, busca por contenido, selecciona y navega al detalle.
+
 ## Post-MVP
-- Sincronización Supabase/Postgres, colaboración, plugin de búsqueda de escritorio (Raycast-style).
+- Sincronización Supabase/Postgres, colaboración.

@@ -100,6 +100,7 @@ export const IpcEvent = {
   EventNotification: 'event:notification',
   EventUpdateStatus: 'event:update:status',
   EventAutomationRun: 'event:automation:run',
+  EventGlobalSearch: 'event:globalSearch',
 } as const
 
 export type IpcEvent = (typeof IpcEvent)[keyof typeof IpcEvent]
