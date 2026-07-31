@@ -72,6 +72,8 @@
   - `security.yml`: audit con `npm run audit` (allowlist GHSA-qwww-vcr4-c8h2) en vez de `npm audit --audit-level=high` (que fallaba por el advisory permitido); CodeQL ampliado a `security-and-quality`.
   - `scripts/audit-code.mjs`: escáner de secretos en archivos versionados (falla si detecta) + reporte de deuda TODO/FIXME/HACK (no bloquea); script raíz `audit:code`.
   - Eliminado script raíz `release` (referenciaba `scripts/release.mjs` inexistente); `docs/guides/contributing.md` actualizado.
+- FASE 9.3 Revisión de deuda técnica. ✅ (decisión)
+  - `format:check` falla de forma preexistente en 86 archivos (59 ts, 21 md, 2 json, 1 mjs, 1 yml — ADRs, docs, configs y componentes). Decisión: no formatear el repo entero (diff mecánico grande); lint-staged formatea solo lo modificado en cada commit. Deuda documentada, no bloqueante.
 
 ## Post-MVP
 - Usuarios multi-rol (Argon2, sesiones), activación de licencias online, sincronización Supabase/Postgres, colaboración, plugin de búsqueda de escritorio (Raycast-style).
