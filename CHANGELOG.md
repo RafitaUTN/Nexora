@@ -6,9 +6,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); vers
 ## [No publicado]
 
 ### Añadido
-- FASE 7 (parcial): suite de tests unitarios e integración con Vitest, cobertura configurada (domain/core/ai/ocr).
+- FASE 7: suite de tests unitarios e integración con Vitest, cobertura configurada (domain/core/ai/ocr).
+- FASE 8.1: tests unitarios de `packages/ocr` (engine + worker): pool de workers, cola, concurrencia durante el arranque, errores, health y dispose (13 tests).
+- FASE 8.3: cobertura ≥ 90% líneas/funciones y ≥ 80% ramas (94.86% / 90.59% / 82.54%): tests de integración para los repositorios sources, classification, ocr_queue y ai_cache/ai_usage; health fallback de Ollama; thresholds subidos a 90/90/80/90.
 - Sección «Actualizaciones» en Ajustes: comprobar manualmente, estado en vivo (`event:update:status`), descarga/progreso e instalación; config de canal, intervalo, auto-check y auto-download.
 - Guardia de fronteras en ESLint para el renderer (prohibida la importación de infraestructura `@documind/core|ai|ocr|document`).
+
+### Corregido
+- Concurrencia en `TesseractOcrEngine`: dos `recognize()` simultáneos durante el arranque duplicaban el pool de workers; ahora el arranque comparte un `workersReady`.
 
 ## [0.1.0] — 2026-07
 

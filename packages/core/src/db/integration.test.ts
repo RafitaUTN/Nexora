@@ -10,6 +10,10 @@ import { SqliteAuditRepository } from './repositories/sqlite-audit-repository'
 import { SqliteAutomationRepository } from './repositories/sqlite-automation-repository'
 import { SqliteDocumentRepository } from './repositories/sqlite-document-repository'
 import { SqliteSearchRepository } from './repositories/sqlite-search-repository'
+import { SqliteSourceRepository } from './repositories/sqlite-source-repository'
+import { SqliteClassificationRepository } from './repositories/sqlite-classification-repository'
+import { SqliteOcrQueueRepository } from './repositories/sqlite-ocr-queue-repository'
+import { SqliteAiCacheRepository, SqliteAiUsageRepository } from './repositories/sqlite-ai-repositories'
 import { SqliteSecretStore } from '../secrets/sqlite-secret-store'
 import { AesGcm } from '../crypto/aes'
 
@@ -156,6 +160,189 @@ describe('integración SQLite', () => {
     expect(hits[0]?.document.filename).toBe('factura.pdf')
     const stats = await docs.stats()
     expect(stats.total).toBe(1)
+  })
+
+  it('source repo: listar, añadir, último scan y eliminar', async () => {
+    const db = freshDb()
+    const repo = new SqliteSourceRepository(db)
+    expect(await repo.list()).toEqual([])
+
+    const added = await repo.add({
+      path: '/home/rafa/docs',
+      name: 'docs',
+      kind: 'folder',
+      scanMode: 'recursive',
+      enabled: true,
+    })
+    expect(added).toMatchObject({ path: '/home/rafa/docs', name: 'docs', kind: 'folder', scanMode: 'recursive', enabled: true })
+
+    await repo.add({
+      path: '/tmp/off',
+      name: 'off',
+      kind: 'file',
+      scanMode: 'flat',
+      enabled: false,
+    })
+
+    const list = await repo.list()
+    expect(list.map((s) => s.name)).toEqual(['docs', 'off'])
+    expect(list[1]?.enabled).toBe(false)
+
+    await repo.setLastScan(added.id, '2026-07-31 10:00:00')
+    expect((await repo.list()).find((s) => s.id === added.id)?.lastScanAt).toBe('2026-07-31 10:00:00')
+
+    await repo.remove(added.id)
+    expect(await repo.list()).toHaveLength(1)
+  })
+
+  it('classification repo: guardar, upsert y entidades', async () => {
+    const db = freshDb()
+    const docs = new SqliteDocumentRepository(db)
+    const repo = new SqliteClassificationRepository(db)
+    const doc = await docs.save({
+      sourceId: null,
+      path: '/class.pdf',
+      filename: 'class.pdf',
+      ext: 'pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 10,
+      hashSha256: 'hash-class',
+      fileMtimeMs: null,
+    })
+
+    expect(await repo.findByDocumentId(doc.id)).toBeNull()
+
+    await repo.save({
+      documentId: doc.id,
+      category: 'factura',
+      confidence: 0.9,
+      provider: 'ollama',
+      model: 'llama3',
+      cached: false,
+      createdAt: '2026-07-31 09:00:00',
+    })
+    expect(await repo.findByDocumentId(doc.id)).toMatchObject({ category: 'factura', confidence: 0.9 })
+
+    await repo.save({
+      documentId: doc.id,
+      category: 'recibo',
+      confidence: 0.5,
+      provider: 'ollama',
+      model: 'llama3',
+      cached: true,
+      createdAt: '2026-07-31 10:00:00',
+    })
+    expect(await repo.findByDocumentId(doc.id)).toMatchObject({ category: 'recibo', cached: true })
+
+    await repo.saveEntities(doc.id, [
+      { kind: 'amount', value: '120', confidence: 0.95 },
+      { kind: 'date', value: '2024-01-01', confidence: 0.8 },
+    ])
+    expect(await repo.listEntities(doc.id)).toHaveLength(2)
+
+    await repo.saveEntities(doc.id, [{ kind: 'email', value: 'a@b.es', confidence: 0.7 }])
+    const entities = await repo.listEntities(doc.id)
+    expect(entities).toHaveLength(1)
+    expect(entities[0]).toMatchObject({ kind: 'email', value: 'a@b.es' })
+
+    await repo.saveEntities(doc.id, [])
+    expect(await repo.listEntities(doc.id)).toHaveLength(1)
+  })
+
+  it('ocr queue repo: encolar, batch por prioridad, estados y conteo', async () => {
+    const db = freshDb()
+    const docs = new SqliteDocumentRepository(db)
+    const repo = new SqliteOcrQueueRepository(db)
+    async function saveDoc(path: string, hash: string): Promise<number> {
+      return (
+        await docs.save({
+          sourceId: null,
+          path,
+          filename: path,
+          ext: 'pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 10,
+          hashSha256: hash,
+          fileMtimeMs: null,
+        })
+      ).id
+    }
+
+    const low = await saveDoc('/low.pdf', 'h-low')
+    const high = await saveDoc('/high.pdf', 'h-high')
+    await repo.enqueue(low)
+    await repo.enqueue(low)
+    await repo.enqueue(high, 10)
+    expect(await repo.pendingCount()).toBe(2)
+
+    const batch = await repo.nextBatch(1)
+    expect(batch).toHaveLength(1)
+    const highId = batch[0]?.id
+    expect(highId).toBeDefined()
+    if (highId === undefined) throw new Error('batch vacío')
+    expect(batch[0]?.documentId).toBe(high)
+
+    await repo.markProcessing(highId)
+    expect(await repo.pendingCount()).toBe(2)
+
+    const next = await repo.nextBatch(10)
+    expect(next[0]?.documentId).toBe(low)
+    const lowId = next[0]?.id
+    expect(lowId).toBeDefined()
+    if (lowId === undefined) throw new Error('batch vacío')
+
+    await repo.markError(highId)
+    await repo.markDone(lowId)
+    expect(await repo.pendingCount()).toBe(0)
+  })
+
+  it('ai cache repo: miss, hit, upsert y expiración', async () => {
+    const db = freshDb()
+    const repo = new SqliteAiCacheRepository(db)
+    expect(await repo.get('hash-1')).toBeNull()
+
+    await repo.set('hash-1', 'respuesta')
+    expect(await repo.get('hash-1')).toBe('respuesta')
+
+    await repo.set('hash-1', 'nueva')
+    expect(await repo.get('hash-1')).toBe('nueva')
+
+    await repo.set('hash-2', 'caduca', 60)
+    db.prepare(`UPDATE ai_cache SET expires_at = datetime('now', '-1 hour') WHERE request_hash = 'hash-2'`).run()
+    expect(await repo.get('hash-2')).toBeNull()
+  })
+
+  it('ai usage repo: registrar y resumir', async () => {
+    const repo = new SqliteAiUsageRepository(freshDb())
+    expect(await repo.summarize()).toEqual({ totalCalls: 0, totalTokens: 0, totalCostUsd: 0, cachedHits: 0 })
+
+    await repo.record({
+      provider: 'openai',
+      model: 'gpt-4o',
+      task: 'classify',
+      promptTokens: 100,
+      completionTokens: 20,
+      estCostUsd: 0.001,
+      latencyMs: 500,
+      cached: true,
+    })
+    await repo.record({
+      provider: 'openai',
+      model: 'gpt-4o',
+      task: 'classify',
+      promptTokens: 50,
+      completionTokens: 10,
+      estCostUsd: 0.0005,
+      latencyMs: 300,
+      cached: false,
+    })
+
+    expect(await repo.summarize()).toEqual({
+      totalCalls: 2,
+      totalTokens: 180,
+      totalCostUsd: 0.0015,
+      cachedHits: 1,
+    })
   })
 
   it('document repo: duplicados, versiones, historial y borrado lógico', async () => {

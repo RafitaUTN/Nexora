@@ -43,10 +43,19 @@
 - electron-builder x3 plataformas, firma, publish, changelog, auto-update con verificación y rollback.
 
 ### FASE 7 — Testing y auditoría final
-- Unit (domain/core/ai/ocr) con fakes de puertos, coverage ≥ 90%.
-- Integration (repositorios contra SQLite temporal, AIProvider contra mock server).
-- E2E Playwright (smoke: abrir, escanear carpeta, buscar).
-- Auditoría: ESLint import/no-restricted, `npm audit`, CodeQL report, revisión de deuda técnica.
+- Unit (domain/core/ai/ocr) con fakes de puertos, coverage ≥ 90%. ✅ (107 tests, 85% → thresholds 85)
+- Integration (repositorios contra SQLite temporal, AIProvider contra mock server). ✅
+- E2E Playwright (smoke: abrir, escanear carpeta, buscar). ⏳ Pendiente
+- Auditoría: ESLint import/no-restricted, `npm audit`, CodeQL report, revisión de deuda técnica. ⏳ Pendiente (FASE 9)
+
+### FASE 8 — Tests OCR y cobertura ≥ 90%
+- FASE 8.1 Unit tests de `packages/ocr` (engine + worker): pool, cola, concurrencia, errores, health, dispose. ✅ (13 tests)
+  - Bug real corregido: `recognize()` simultáneos durante el arranque duplicaban el pool (spawn) → `workersReady` compartido.
+- FASE 8.2 E2E Playwright (smoke: abrir, escanear carpeta, buscar). ⏳ Pendiente
+- FASE 8.3 Cobertura ≥ 90% líneas/funciones, ≥ 80% ramas. ✅ (94.86% / 90.59% / 82.54%)
+  - Cubiertos los 4 repositorios a 0%: sources, classification, ocr_queue, ai_cache/ai_usage (tests de integración).
+  - Añadido health fallback de Ollama (ramas del catch).
+  - Thresholds subidos en `vitest.config.ts` a 90/90/80/90.
 
 ## Post-MVP
 - Usuarios multi-rol (Argon2, sesiones), activación de licencias online, sincronización Supabase/Postgres, colaboración, plugin de búsqueda de escritorio (Raycast-style).

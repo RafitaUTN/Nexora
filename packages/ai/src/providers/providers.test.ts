@@ -52,6 +52,13 @@ describe('OllamaProvider', () => {
     const provider = new OllamaProvider({ id: 'ollama', apiKey: '', baseUrl, defaultModel: 'llama3.2' })
     expect((await provider.health()).ok).toBe(true)
   })
+
+  it('health no-ok si el servidor no responde', async () => {
+    const provider = new OllamaProvider({ id: 'ollama', apiKey: '', baseUrl: 'http://127.0.0.1:1', defaultModel: 'llama3.2' })
+    const health = await provider.health()
+    expect(health.ok).toBe(false)
+    expect(health.error?.length ?? 0).toBeGreaterThan(0)
+  })
 })
 
 describe('ClaudeProvider', () => {

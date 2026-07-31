@@ -28,6 +28,7 @@ export class TesseractOcrEngine implements OCREngine {
   private readonly langPath?: string
   private readonly scaleFactor: number
   private pool: PoolWorker[] = []
+  private workersReady: Promise<void> | null = null
   private queue: Array<{
     resolve: (r: OCRResult) => void
     reject: (e: Error) => void
@@ -63,15 +64,22 @@ export class TesseractOcrEngine implements OCREngine {
   async dispose(): Promise<void> {
     const workers = this.pool.map((slot) => slot.worker)
     this.pool = []
+    this.workersReady = null
     await Promise.allSettled(workers.map((w) => w.terminate()))
   }
 
-  private async ensureWorkers(): Promise<void> {
-    if (this.pool.length === 0) {
-      const count = Math.max(1, this.maxWorkers)
-      for (let i = 0; i < count; i++) {
-        this.pool.push({ worker: await this.spawnWorker(), busy: false })
-      }
+  private ensureWorkers(): Promise<void> {
+    if (this.pool.length > 0) return Promise.resolve()
+    if (!this.workersReady) {
+      this.workersReady = this.spawnPool()
+    }
+    return this.workersReady
+  }
+
+  private async spawnPool(): Promise<void> {
+    const count = Math.max(1, this.maxWorkers)
+    for (let i = 0; i < count; i++) {
+      this.pool.push({ worker: await this.spawnWorker(), busy: false })
     }
   }
 
