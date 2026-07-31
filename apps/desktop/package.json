@@ -4,6 +4,7 @@
     "private": true,
     "description": "DocuMind Desktop — Gestión inteligente de documentos",
     "author": "DocuMind <dev@documind.app>",
+    "homepage": "https://github.com/RafitaUTN/Nexora",
     "type": "module",
     "main": "./out/main/index.js",
     "scripts": {
