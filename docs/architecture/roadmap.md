@@ -149,6 +149,7 @@
 - Modal global `UpdateModal`: al detectar versión nueva informa de la versión y permite descargar/instalar o posponer (no reaparece para la misma versión). Canal IPC `UpdatesDownload`. ✅
 - Fix: `updates.check()` ya no se bloquea por `autoCheck=false` (el botón manual siempre consulta). ✅
 - E2E del modal de actualización (`e2e/smoke.spec.ts`). ✅
+- Versión 1.1.1 publicada y verificable con la release `v1.1.1` (chequeo contra GitHub Releases). ✅
 
 ## Post-MVP
 - Compartición por carpetas individuales y control granular por documento.

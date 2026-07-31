@@ -17,6 +17,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); vers
 
 ### Verificación
 - 293 tests / 37 ficheros; typecheck, lint, build, smoke y e2e OK (incluye nuevo e2e del modal de actualización).
+- Versionado a 1.1.1 en todos los paquetes (`@documind/*`) y `APP_VERSION`; release publicada con tag `v1.1.1`.
 
 ## [1.1.0] — 2026-07-31
 

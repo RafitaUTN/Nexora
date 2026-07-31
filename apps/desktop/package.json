@@ -1,6 +1,6 @@
 {
     "name": "documind",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "private": true,
     "description": "DocuMind Desktop â€” GestiÃ³n inteligente de documentos",
     "author": "DocuMind <dev@documind.app>",
@@ -31,12 +31,12 @@
         "tesseract.js": "^5.1.1"
     },
     "devDependencies": {
-        "@documind/ai": "1.1.0",
-        "@documind/core": "1.1.0",
-        "@documind/document": "1.1.0",
-        "@documind/domain": "1.1.0",
-        "@documind/ocr": "1.1.0",
-        "@documind/shared": "1.1.0",
+        "@documind/ai": "1.1.1",
+        "@documind/core": "1.1.1",
+        "@documind/document": "1.1.1",
+        "@documind/domain": "1.1.1",
+        "@documind/ocr": "1.1.1",
+        "@documind/shared": "1.1.1",
         "@electron/notarize": "^2.5.0",
         "@napi-rs/canvas": "^0.1.54",
         "@tanstack/react-query": "^5.51.23",
