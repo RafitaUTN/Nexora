@@ -11,6 +11,14 @@ export interface UpdateStatus {
 }
 
 /**
+ * Feed de actualizaciones para pruebas locales. Si se define, el autoUpdater
+ * ignora GitHub Releases y consulta esta URL (provider «generic»), sirviendo
+ * `latest.yml` + instalador desde un servidor propio. P. ej.:
+ * `DOCUMIND_UPDATE_URL=http://192.168.1.10:8080/`
+ */
+const UPDATE_FEED_URL = process.env.DOCUMIND_UPDATE_URL
+
+/**
  * Gestión de actualizaciones con electron-updater contra GitHub Releases.
  * En desarrollo el autoUpdater no está disponible: se notifica «current».
  */
@@ -79,6 +87,9 @@ export class UpdateManager {
       updater.logger = console
       updater.autoDownload = false
       updater.autoInstallOnAppQuit = true
+      if (UPDATE_FEED_URL) {
+        updater.setFeedURL({ provider: 'generic', url: UPDATE_FEED_URL })
+      }
       updater.on('checking-for-update', () =>
         this.notify({ status: 'checking', currentVersion: APP_VERSION }),
       )
