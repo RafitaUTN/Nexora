@@ -293,6 +293,15 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
     `,
   },
+  {
+    version: 6,
+    name: 'license_columns',
+    up: `
+      ALTER TABLE licenses ADD COLUMN key_sha256 TEXT;
+      ALTER TABLE licenses ADD COLUMN signature TEXT;
+      ALTER TABLE licenses ADD COLUMN max_devices INTEGER;
+    `,
+  },
 ]
 
 export function runMigrations(db: SqliteDatabase, list: Migration[] = migrations): void {

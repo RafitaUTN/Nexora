@@ -450,6 +450,29 @@ export function registerIpc(context: IpcContext): void {
     })
     return { ok: true }
   })
+
+  // License (activación/verificación online). La verificación de la firma es
+  // local; solo la activación/desactivación requieren red y rol admin.
+  handle(IpcChannel.LicenseStatus, async () => {
+    requireRole('viewer')
+    return rt().license.status()
+  })
+  handle(IpcChannel.LicenseActivate, async (key: unknown) => {
+    requireRole('admin')
+    const license = await rt().license.activate(String(key ?? '').trim())
+    await rt().auditService.record({
+      action: 'license.activate',
+      entityType: 'license',
+      detail: `${license.tier}${license.expiresAt ? ` · hasta ${license.expiresAt}` : ' · perpetua'}`,
+    })
+    return license
+  })
+  handle(IpcChannel.LicenseDeactivate, async () => {
+    requireRole('admin')
+    await rt().license.deactivate()
+    await rt().auditService.record({ action: 'license.deactivate', entityType: 'license' })
+    return { ok: true }
+  })
 }
 
 /** Reenvía los eventos del dominio al renderer por los canales IpcEvent. */

@@ -8,6 +8,8 @@ import type {
   DocumentStats,
   DocumentSummary,
   HistoryEntry,
+  License,
+  LicenseKey,
   NewAutomation,
   NewSource,
   NewTag,
@@ -157,6 +159,11 @@ export interface DocuMindApi {
     check(): Promise<UpdateStatus>
     install(): Promise<{ ok: boolean }>
     state(): Promise<UpdateStatus>
+  }
+  license: {
+    status(): Promise<License>
+    activate(key: LicenseKey): Promise<License>
+    deactivate(): Promise<{ ok: boolean }>
   }
   on<T>(channel: IpcEvent, callback: (payload: T) => void): () => void
 }

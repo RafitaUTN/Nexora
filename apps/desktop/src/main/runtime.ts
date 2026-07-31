@@ -16,6 +16,7 @@ import {
   AutomationService,
   ClassificationService,
   DocumentService,
+  LicenseService,
   SearchService,
   SettingsService,
   TagService,
@@ -26,7 +27,9 @@ import { TesseractOcrEngine } from '@documind/ocr'
 import {
   AesGcm,
   ConsoleLogger,
+  CryptoLicenseVerifier,
   CryptoSessionTokens,
+  HttpLicenseServer,
   InMemoryEventBus,
   IndexingService,
   ScryptPasswordHasher,
@@ -37,6 +40,7 @@ import {
   SqliteClassificationRepository,
   SqliteDatabase,
   SqliteDocumentRepository,
+  SqliteLicenseRepository,
   SqliteOcrQueueRepository,
   SqliteSearchRepository,
   SqliteSecretStore,
@@ -100,6 +104,7 @@ export interface AppRuntime {
   automationService: AutomationService
   classificationService: ClassificationService
   auth: SessionManager
+  license: LicenseService
   indexing: IndexingService
   ocrEngine: OCREngine | null
   watcher: FileWatcher
@@ -120,9 +125,26 @@ export interface AppRuntime {
 
 const DB_FILE = 'documind.db'
 const BACKUPS_DIR = 'backups'
+const DEVICE_ID_FILE = 'device.id'
+const DEFAULT_LICENSE_URL = 'https://licenses.example.invalid'
 
 export function dbPathOf(userDataPath: string): string {
   return join(userDataPath, DB_FILE)
+}
+
+/** Identificador de instalación estable, persistido en userData. */
+export function deviceIdOf(userDataPath: string): string {
+  const idFile = join(userDataPath, DEVICE_ID_FILE)
+  try {
+    const existing = readFileSync(idFile, 'utf8').trim()
+    if (existing) return existing
+  } catch {
+    // se genera a continuación
+  }
+  const id = randomHex(16)
+  mkdirSync(userDataPath, { recursive: true })
+  writeFileSync(idFile, id, { mode: 0o600 })
+  return id
 }
 
 /** Genera o recupera el secreto maestro persistido (sin depender de Electron). */
@@ -185,6 +207,15 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
     new CryptoSessionTokens(),
   )
   const auth = new SessionManager(authService, secretStore)
+
+  const license = new LicenseService(
+    new SqliteLicenseRepository(db),
+    new CryptoLicenseVerifier(),
+    new HttpLicenseServer({
+      baseUrl: process.env.DOCUMIND_LICENSE_URL ?? DEFAULT_LICENSE_URL,
+    }),
+    deviceIdOf(userDataPath),
+  )
 
   const ocrEngine =
     options.ocrEngine !== undefined
@@ -331,6 +362,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
     auditService,
     automationService,
     auth,
+    license,
     get classificationService(): ClassificationService {
       return classificationService
     },

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, KeyRound, RefreshCw, Save, Trash2, Wifi } from 'lucide-react'
+import { Download, KeyRound, LogOut, RefreshCw, Save, ShieldCheck, Trash2, Wifi } from 'lucide-react'
 import { IpcEvent } from '@documind/shared'
-import type { AppSettings, ProviderId, UpdateStatus } from '@/types'
+import type { AppSettings, License, LicenseKey, LicenseTier, ProviderId, UpdateStatus } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { queryKeys } from '@/lib/query-keys'
 import { useToasts } from '@/lib/toasts'
+import { useAuth } from '@/store/auth'
 
 const PROVIDERS: ProviderId[] = ['openrouter', 'openai', 'gemini', 'claude', 'ollama']
 
@@ -147,6 +148,106 @@ const STATUS_META: Record<
   downloading: { label: 'Descargando…', tone: 'info' },
   downloaded: { label: 'Lista para instalar', tone: 'success' },
   error: { label: 'Error', tone: 'error' },
+}
+
+const TIER_LABELS: Record<LicenseTier, string> = {
+  free: 'Gratuita',
+  pro: 'Pro',
+  enterprise: 'Empresa',
+}
+
+const LICENSE_STATUS_META: Record<
+  License['status'],
+  { label: string; tone: 'neutral' | 'success' | 'error' }
+> = {
+  active: { label: 'Activa', tone: 'success' },
+  expired: { label: 'Expirada', tone: 'error' },
+  revoked: { label: 'Revocada', tone: 'error' },
+}
+
+function LicenseSection(): JSX.Element {
+  const queryClient = useQueryClient()
+  const push = useToasts((s) => s.push)
+  const currentUser = useAuth((s) => s.currentUser)
+  const isAdmin = currentUser?.role === 'admin'
+  const [key, setKey] = useState('')
+
+  const license = useQuery({ queryKey: queryKeys.license, queryFn: () => window.api.license.status() })
+
+  const activateMutation = useMutation({
+    mutationFn: (licenseKey: string) => window.api.license.activate(licenseKey as LicenseKey),
+    onSuccess: (next) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.license })
+      setKey('')
+      push({ kind: 'success', title: 'Licencia activada', body: `Plan ${TIER_LABELS[next.tier]}` })
+    },
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo activar la licencia', body: error.message }),
+  })
+
+  const deactivateMutation = useMutation({
+    mutationFn: () => window.api.license.deactivate(),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.license })
+      push({ kind: 'success', title: 'Licencia desactivada en este dispositivo' })
+    },
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo desactivar', body: error.message }),
+  })
+
+  const meta = license.data
+    ? LICENSE_STATUS_META[license.data.status]
+    : { label: '…', tone: 'neutral' as const }
+
+  return (
+    <div className="space-y-4 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Badge tone={meta.tone}>{meta.label}</Badge>
+          {license.data ? <Badge tone="info">{TIER_LABELS[license.data.tier]}</Badge> : null}
+          {license.data && license.data.tier !== 'free' ? (
+            <p className="text-sm text-muted-foreground">
+              {license.data.expiresAt
+                ? `Válida hasta ${new Date(license.data.expiresAt).toLocaleDateString()}`
+                : 'Licencia perpetua'}
+            </p>
+          ) : null}
+        </div>
+        {isAdmin ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => deactivateMutation.mutate()}
+            disabled={deactivateMutation.isPending || license.data?.tier === 'free'}
+          >
+            {deactivateMutation.isPending ? <Spinner /> : <LogOut />}
+            Desactivar
+          </Button>
+        ) : null}
+      </div>
+
+      {isAdmin ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <Input
+            type="text"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            placeholder="XXXX-XXXX-XXXX-XXXX"
+            className="flex-1 basis-64"
+            disabled={license.data?.tier !== 'free' || activateMutation.isPending}
+          />
+          <Button
+            size="sm"
+            disabled={!key.trim() || license.data?.tier !== 'free' || activateMutation.isPending}
+            onClick={() => activateMutation.mutate(key.trim())}
+          >
+            {activateMutation.isPending ? <Spinner /> : <KeyRound />}
+            Activar licencia
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 function UpdatesSection(): JSX.Element {
@@ -506,6 +607,19 @@ export function SettingsPage(): JSX.Element {
             <Switch checked={form.autoDownload} onCheckedChange={(checked) => set('autoDownload', checked)} />
           </div>
         </div>
+      </section>
+
+      <section className="rounded-lg border bg-card">
+        <div className="border-b p-4">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="size-4 text-muted-foreground" />
+            <h2 className="text-base font-semibold">Licencia</h2>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Plan y estado de activación. La clave se verifica sin conexión mediante firma digital.
+          </p>
+        </div>
+        <LicenseSection />
       </section>
 
       <section className="rounded-lg border bg-card">

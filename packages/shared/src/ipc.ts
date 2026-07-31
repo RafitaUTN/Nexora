@@ -79,6 +79,11 @@ export const IpcChannel = {
   UpdatesCheck: 'updates:check',
   UpdatesInstall: 'updates:install',
   UpdatesState: 'updates:state',
+
+  // License
+  LicenseStatus: 'license:status',
+  LicenseActivate: 'license:activate',
+  LicenseDeactivate: 'license:deactivate',
 } as const
 
 export type IpcChannel = (typeof IpcChannel)[keyof typeof IpcChannel]

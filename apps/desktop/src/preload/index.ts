@@ -106,6 +106,12 @@ const api: DocuMindApi = {
     state: () => invoke(IpcChannel.UpdatesState),
   },
 
+  license: {
+    status: () => invoke(IpcChannel.LicenseStatus),
+    activate: (key) => invoke(IpcChannel.LicenseActivate, key),
+    deactivate: () => invoke(IpcChannel.LicenseDeactivate),
+  },
+
   /** Suscripción a eventos del proceso principal (devuelve unsubscribe). */
   on: <T>(channel: IpcEvent, callback: (payload: T) => void) => {
     const listener = (_event: IpcRendererEvent, payload: T): void => callback(payload)

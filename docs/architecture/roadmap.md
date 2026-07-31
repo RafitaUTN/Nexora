@@ -90,5 +90,13 @@
   - `AuthGate` (setup → login → app), `LoginPage`, `SetupPage`; store zustand `useAuth`.
   - `UsersPage` admin-only (crear, rol, eliminar, cambiar contraseña) + enlace en sidebar solo admin; topbar muestra usuario/rol y logout.
 
+### FASE 11 — Licencias online
+- ADR-0012: licencias firmadas con Ed25519. El servidor firma el payload (keySha256, tier, deviceId, activatedAt, expiresAt, maxDevices) y la app lo verifica localmente con la clave pública embebida; la clave de licencia solo se guarda como SHA-256. `expiresAt` vacío = perpetua.
+- Dominio: entidad `License` reescrita con `signature`, puertos `LicenseRepository`/`LicenseServer`/`LicenseVerifier`, `LicenseService` con `status()` (re-evalúa firma/expiración en cada lectura), `activate()`, `deactivate()` best-effort, `isEntitled()` y `LicenseError` con códigos.
+- Core: migración 006 `license_columns` (key_sha256, signature, max_devices); `SqliteLicenseRepository` (fila fija id=1); `CryptoLicenseVerifier` con `canonicalJson` (claves ordenadas) y clave pública dev embebida; `HttpLicenseServer` (`POST /v1/licenses/activate|deactivate`, timeout 10s, mapeo de errores HTTP→LicenseError).
+- Integración: canales `license:status|activate|deactivate` (status = viewer; activate/deactivate = admin, con auditoría); `deviceIdOf` (archivo `device.id` persistente); URL configurable vía `DOCUMIND_LICENSE_URL`.
+- UI: sección «Licencia» en Configuración (badge de estado/plan, activar con clave, desactivar admin-only).
+- Verificación: 199 tests, cobertura 92.37/82.98/91.8/94.03; typecheck, lint y build OK.
+
 ## Post-MVP
-- Activación de licencias online, sincronización Supabase/Postgres, colaboración, plugin de búsqueda de escritorio (Raycast-style).
+- Sincronización Supabase/Postgres, colaboración, plugin de búsqueda de escritorio (Raycast-style).

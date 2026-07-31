@@ -16,4 +16,5 @@ export const queryKeys = {
   aiUsage: ['ai', 'usage'] as const,
   apiKey: (provider: string) => ['ai', 'apiKey', provider] as const,
   users: ['users'] as const,
+  license: ['license'] as const,
 }

@@ -23,6 +23,8 @@ import type { EventBus, EventMap, EventName } from '../ports/event-bus'
 import type { PasswordHasher } from '../ports/password-hasher'
 import type { SessionRepository, UserRepository } from '../ports/repositories'
 import type { SessionTokenService } from '../ports/session-token'
+import type { License, LicensePayload } from '../entities/license'
+import type { LicenseRepository, LicenseServer, LicenseVerifier } from '../ports/license'
 
 export class FakeEventBus implements EventBus {
   readonly emitted: { event: EventName; payload: unknown }[] = []
@@ -516,5 +518,49 @@ export class FakeSessionRepository implements SessionRepository {
   async deleteExpired(): Promise<void> {
     const now = Date.now()
     this.sessions = this.sessions.filter((s) => new Date(s.expiresAt).getTime() >= now)
+  }
+}
+
+export class FakeLicenseRepository implements LicenseRepository {
+  license: License | null = null
+
+  async get(): Promise<License | null> {
+    return this.license
+  }
+
+  async set(license: License): Promise<void> {
+    this.license = { ...license }
+  }
+
+  async clear(): Promise<void> {
+    this.license = null
+  }
+}
+
+export class FakeLicenseVerifier implements LicenseVerifier {
+  valid = true
+
+  async verify(_payload: LicensePayload, _signature: string): Promise<boolean> {
+    return this.valid
+  }
+}
+
+export class FakeLicenseServer implements LicenseServer {
+  result: { payload: LicensePayload; signature: string } | null = null
+  error: Error | null = null
+  deactivated = false
+  readonly activatedKeys: string[] = []
+
+  async activate(key: string, _deviceId: string): Promise<{ payload: LicensePayload; signature: string }> {
+    this.activatedKeys.push(key)
+    if (this.error) throw this.error
+    if (!this.result) {
+      throw new Error('No se pudo conectar con el servidor de licencias')
+    }
+    return { payload: { ...this.result.payload }, signature: this.result.signature }
+  }
+
+  async deactivate(_deviceId: string): Promise<void> {
+    this.deactivated = true
   }
 }
