@@ -32,8 +32,9 @@ gestionado), 3) propague borrados como tombstones y 4) siga funcionando offline.
    `public.sync_document_tags` y `public.sync_meta`** creadas en el proyecto Supabase
    `jhxczeottwfmxuohdwqd` (plan free, región us-east-1). La configuración persiste en
    `settings` (clave `sync.settings`) con `enabled`, `url`, `anonKey` y `lastPullMs`.
-   La `anonKey` es publicable por diseño; los datos solo están a salvo si **RLS está
-   habilitada** (pendiente en el esquema remoto actual — ver Consecuencias).
+   La `anonKey` es publicable por diseño; **RLS está habilitada** con políticas
+   permisivas para el rol `anon` (equivalente al comportamiento previo); la
+   separación real por usuario requiere Supabase Auth (post-MVP).
 6. **`SyncService` en el dominio** con puertos `SyncLocalStore` / `SyncRemoteStore`:
    `sync()` sube los pendientes (UPSERT con `Prefer: resolution=merge-duplicates`),
    trae los cambios de otros dispositivos posteriores a `lastPullMs`, los aplica con
@@ -52,9 +53,10 @@ gestionado), 3) propague borrados como tombstones y 4) siga funcionando offline.
 ## Consecuencias
 - La sincronización es **manual** (botón «Sincronizar ahora»); no hay auto-sync en
   segundo plano en esta fase.
-- Los datos remotos son legibles por cualquiera con la anonKey mientras **RLS esté
-  deshabilitada** (estado actual del proyecto de desarrollo). Antes de producción hay
-  que habilitar RLS con políticas por `device_id`/usuario.
+- Los datos remotos son legibles por cualquiera con la anonKey: **RLS está habilitada
+  pero con políticas permisivas para el rol `anon`** (la app solo usa la anon key),
+  por lo que la protección real por usuario exige Supabase Auth con políticas por
+  `auth.uid()` — pendiente en post-MVP «colaboración».
 - La app funciona sin red: solo el ciclo de sync requiere conexión.
 - Los triggers del outbox añaden una escritura extra por mutación en las tablas
   implicadas (coste despreciable en volúmenes de escritorio).
