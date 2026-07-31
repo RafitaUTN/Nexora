@@ -33,7 +33,7 @@ import {
 } from '@documind/domain'
 import { createAIProvider } from '@documind/ai'
 import { ExtractionService } from '@documind/document'
-import { TesseractOcrEngine } from '@documind/ocr'
+import { OcrLanguageManager, TesseractOcrEngine } from '@documind/ocr'
 import {
   AesGcm,
   ConsoleLogger,
@@ -136,6 +136,8 @@ export interface AppRuntime {
   }
   indexing: IndexingService
   ocrEngine: OCREngine | null
+  /** Gestión de idiomas OCR (catálogo, descarga e instalación de paquetes). */
+  ocrLanguages: OcrLanguageManager
   watcher: FileWatcher
   backups: BackupManager
   updates: UpdateManager
@@ -166,6 +168,7 @@ export interface AppRuntime {
 const DB_FILE = 'documind.db'
 const BACKUPS_DIR = 'backups'
 const DEVICE_ID_FILE = 'device.id'
+const TESSDATA_DIR = 'tessdata'
 const DEFAULT_LICENSE_URL = 'https://licenses.example.invalid'
 /** Auto-sync: primera ejecución y periodicidad en segundo plano. */
 const AUTO_SYNC_INITIAL_MS = 5_000
@@ -367,13 +370,25 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
   }, AUTO_SYNC_INTERVAL_MS)
   autoSyncInterval.unref?.()
 
+  const extraction = new ExtractionService()
+  let settingsCache: AppSettings = await settingsService.get()
+
+  // Paquetes de idioma OCR: se guardan bajo userData/tessdata. Los idiomas
+  // preinstalados se descargan en segundo plano al arrancar; el worker usa
+  // el CDN como respaldo si algún idioma aún no está local.
+  const tessdataPath = join(userDataPath, TESSDATA_DIR)
+  mkdirSync(tessdataPath, { recursive: true })
+  const ocrLanguages = new OcrLanguageManager({ langPath: tessdataPath, logger })
+  void ocrLanguages.ensurePreinstalled((progress) => bus.emit('ocr:language:progress', progress))
+
   const ocrEngine =
     options.ocrEngine !== undefined
       ? options.ocrEngine
-      : new TesseractOcrEngine({ defaultLanguages: ['spa', 'eng'], maxWorkers: 2 })
-
-  const extraction = new ExtractionService()
-  let settingsCache: AppSettings = await settingsService.get()
+      : new TesseractOcrEngine({
+          defaultLanguages: settingsCache.ocrLanguages,
+          langPath: tessdataPath,
+          maxWorkers: 2,
+        })
 
   const getProvider = async (): Promise<AIProvider | null> => {
     const settings = await settingsService.get()
@@ -460,9 +475,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
 
   watcher.onChange((change) => {
     if (!isAllowedExtension(change.path)) return
-    const sourceId = [...watchedSources.entries()].find(([, root]) =>
-      change.path.startsWith(root),
-    )?.[0]
+    const sourceId = [...watchedSources.entries()].find(([, root]) => change.path.startsWith(root))?.[0]
     void (async () => {
       try {
         if (change.kind === 'unlink') {
@@ -492,10 +505,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
     },
   }
   const runningAutomations = new Set<number>()
-  const runAutomations = (
-    trigger: 'document:indexed' | 'document:classified',
-    documentId: number,
-  ): void => {
+  const runAutomations = (trigger: 'document:indexed' | 'document:classified', documentId: number): void => {
     if (runningAutomations.has(documentId)) return
     runningAutomations.add(documentId)
     void automationService.runForTrigger(trigger, documentId, automationActions).finally(() => {
@@ -503,9 +513,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
     })
   }
   bus.on('document:indexed', ({ documentId }) => runAutomations('document:indexed', documentId))
-  bus.on('document:classified', ({ documentId }) =>
-    runAutomations('document:classified', documentId),
-  )
+  bus.on('document:classified', ({ documentId }) => runAutomations('document:classified', documentId))
   bus.on('automation:run', ({ automationId, documentId, ok }) => {
     void auditService.record({
       action: ok ? 'automation.run' : 'automation.failed',
@@ -559,6 +567,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<AppRuntime
       return indexing
     },
     ocrEngine,
+    ocrLanguages,
     watcher,
     backups,
     updates,

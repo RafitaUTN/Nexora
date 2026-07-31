@@ -15,3 +15,37 @@ export const ocrHealthSchema = z.object({
   error: z.string().nullable(),
 })
 export type OCRHealth = z.infer<typeof ocrHealthSchema>
+
+/** Idioma OCR visto desde la UI. El código interno nunca se muestra al usuario. */
+export interface OcrLanguageInfo {
+  /** Código interno de Tesseract (spa, eng, …). No se expone en la UI. */
+  code: string
+  /** Nombre legible en español. */
+  name: string
+  /** Nombre nativo del idioma. */
+  nativeName: string
+  /** Se descarga automáticamente en la primera ejecución. */
+  preinstalled: boolean
+  /** El paquete de datos está disponible localmente. */
+  installed: boolean
+  /** Versión del paquete instalado, si lo hay. */
+  version: string | null
+  /** Activado en los ajustes (se usa para OCR). */
+  active: boolean
+  /** Hay una versión más reciente disponible (tras checkForUpdates). */
+  updateAvailable: boolean
+}
+
+export interface OcrLanguageProgress {
+  code: string
+  /** Progreso 0..1. */
+  progress: number
+  status: 'downloading' | 'done' | 'error'
+  error?: string
+}
+
+export interface OcrLanguageUpdate {
+  code: string
+  currentVersion: string | null
+  latestVersion: string
+}

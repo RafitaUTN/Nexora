@@ -14,6 +14,8 @@ import type {
   NewAutomation,
   NewSource,
   NewTag,
+  OcrLanguageInfo,
+  OcrLanguageUpdate,
   PagedResult,
   PublicUser,
   QaResult,
@@ -133,6 +135,10 @@ export interface DocuMindApi {
   }
   ocr: {
     health(): Promise<OcrHealthView>
+    languages(): Promise<OcrLanguageInfo[]>
+    installLanguage(code: string): Promise<{ code: string; ok: boolean }>
+    removeLanguage(code: string): Promise<{ code: string; ok: boolean }>
+    checkLanguageUpdates(): Promise<OcrLanguageUpdate[]>
   }
   settings: {
     get(): Promise<AppSettings>

@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
 import Tesseract from 'tesseract.js'
 
@@ -12,21 +14,42 @@ interface WorkerData {
 const data = workerData as WorkerData
 
 let tessWorker: TessWorker | null = null
-let loading: Promise<TessWorker> | null = null
+let createTask: Promise<TessWorker> | null = null
+let localMode = false
 
-async function getWorker(): Promise<TessWorker> {
-  if (tessWorker) return tessWorker
-  if (!loading) {
-    loading = (async () => {
-      const w = await Tesseract.createWorker(data.defaultLanguages, 1, {
-        ...(data.langPath ? { langPath: data.langPath } : {}),
+const langFile = (lang: string): string => join(data.langPath ?? '', `${lang}.traineddata.gz`)
+
+/**
+ * True si todos los idiomas pedidos están disponibles en el langPath local.
+ * Si no, el worker usa el CDN de Tesseract para ese idioma (modo red).
+ */
+function allLocal(langs: string[]): boolean {
+  return data.langPath !== undefined && langs.every((lang) => existsSync(langFile(lang)))
+}
+
+async function getWorker(useLocal: boolean): Promise<TessWorker> {
+  if (tessWorker && localMode === useLocal) return tessWorker
+  if (createTask) {
+    const existing = await createTask
+    if (localMode === useLocal) return existing
+  }
+  createTask = (async () => {
+    try {
+      if (tessWorker) {
+        await tessWorker.terminate()
+        tessWorker = null
+      }
+      tessWorker = await Tesseract.createWorker(data.defaultLanguages, 1, {
+        ...(useLocal && data.langPath ? { langPath: data.langPath } : {}),
         logger: () => undefined,
       })
-      tessWorker = w
-      return w
-    })()
-  }
-  return loading
+      localMode = useLocal
+      return tessWorker
+    } finally {
+      createTask = null
+    }
+  })()
+  return createTask
 }
 
 interface JobMessage {
@@ -36,7 +59,7 @@ interface JobMessage {
 
 parentPort?.on('message', async (message: JobMessage) => {
   try {
-    const worker = await getWorker()
+    const worker = await getWorker(allLocal(message.languages))
     if (message.languages.join(',') !== data.defaultLanguages.join(',')) {
       await worker.reinitialize(message.languages.join('+'), 1)
     }

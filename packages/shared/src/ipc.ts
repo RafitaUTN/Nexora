@@ -47,6 +47,10 @@ export const IpcChannel = {
 
   // OCR
   OcrHealth: 'ocr:health',
+  OcrLanguagesList: 'ocr:languages:list',
+  OcrLanguageInstall: 'ocr:language:install',
+  OcrLanguageRemove: 'ocr:language:remove',
+  OcrLanguageCheckUpdates: 'ocr:language:checkUpdates',
 
   // Settings
   SettingsGet: 'settings:get',
@@ -117,6 +121,7 @@ export const IpcEvent = {
   EventDocumentStatus: 'event:document:status',
   EventIndexProgress: 'event:index:progress',
   EventOcrProgress: 'event:ocr:progress',
+  EventOcrLanguageProgress: 'event:ocr:language:progress',
   EventAiProgress: 'event:ai:progress',
   EventNotification: 'event:notification',
   EventUpdateStatus: 'event:update:status',

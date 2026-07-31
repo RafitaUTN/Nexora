@@ -49,10 +49,7 @@ function messageOf(error: unknown): string {
  * entrada (zod), ejecuta el caso de uso y devuelve un Result tipado.
  */
 export function registerIpc(context: IpcContext): void {
-  const handle = <Args extends unknown[], R>(
-    channel: string,
-    fn: (...args: Args) => Promise<R>,
-  ): void => {
+  const handle = <Args extends unknown[], R>(channel: string, fn: (...args: Args) => Promise<R>): void => {
     ipcMain.handle(channel, async (_event, ...args: Args) => {
       try {
         return { ok: true as const, data: await fn(...args) }
@@ -186,9 +183,7 @@ export function registerIpc(context: IpcContext): void {
     return { id }
   })
   handle(IpcChannel.DocumentsStats, async () => rt().documentService.stats())
-  handle(IpcChannel.DocumentsHistory, async (id: number) =>
-    rt().repos.documents.listHistory(id, 50),
-  )
+  handle(IpcChannel.DocumentsHistory, async (id: number) => rt().repos.documents.listHistory(id, 50))
 
   // Sources
   handle(IpcChannel.SourcesList, async () => rt().repos.sources.list())
@@ -336,6 +331,26 @@ export function registerIpc(context: IpcContext): void {
     if (!engine) return { ok: false, engine: 'none', error: 'OCR no disponible' }
     return engine.health()
   })
+  handle(IpcChannel.OcrLanguagesList, async () => {
+    const settings = await rt().settingsService.get()
+    return rt().ocrLanguages.list(settings.ocrLanguages)
+  })
+  handle(IpcChannel.OcrLanguageInstall, async (payload: { code?: unknown }) => {
+    requireRole('admin')
+    const code = String(payload?.code ?? '').trim()
+    if (!rt().ocrLanguages.language(code)) {
+      throw new Error('Idioma no soportado')
+    }
+    await rt().ocrLanguages.install(code, (progress) => rt().bus.emit('ocr:language:progress', progress))
+    return { code, ok: true }
+  })
+  handle(IpcChannel.OcrLanguageRemove, async (payload: { code?: unknown }) => {
+    requireRole('admin')
+    const code = String(payload?.code ?? '').trim()
+    await rt().ocrLanguages.remove(code)
+    return { code, ok: true }
+  })
+  handle(IpcChannel.OcrLanguageCheckUpdates, async () => rt().ocrLanguages.checkForUpdates())
 
   // Settings
   handle(IpcChannel.SettingsGet, async () => rt().settingsService.get())
@@ -524,53 +539,52 @@ export function registerIpc(context: IpcContext): void {
     })
     return status
   })
-  handle(IpcChannel.SyncConfigure, async (payload: {
-    url?: unknown
-    anonKey?: unknown
-    email?: unknown
-    password?: unknown
-  }) => {
-    requireRole('admin')
-    const url = String(payload?.url ?? '').trim()
-    const anonKey = String(payload?.anonKey ?? '').trim()
-    const email = String(payload?.email ?? '').trim()
-    const password = String(payload?.password ?? '')
-    if (!url) throw new SyncError('URL del proyecto Supabase requerida', 'ERR_SYNC_NOT_CONFIGURED')
-    if (!anonKey) throw new SyncError('Clave anon del proyecto requerida', 'ERR_SYNC_NOT_CONFIGURED')
-    if (!email || !password) {
-      throw new SyncError('Correo y contraseña de la cuenta Supabase requeridos', 'ERR_SYNC_AUTH')
-    }
-    const status = await rt().syncLogin(url, anonKey, email, password)
-    await rt().auditService.record({
-      action: 'sync.configure',
-      detail: `${status.url} · ${status.email}`,
-    })
-    return status
-  })
-  handle(IpcChannel.SyncSignUp, async (payload: {
-    url?: unknown
-    anonKey?: unknown
-    email?: unknown
-    password?: unknown
-  }) => {
-    requireRole('admin')
-    const url = String(payload?.url ?? '').trim()
-    const anonKey = String(payload?.anonKey ?? '').trim()
-    const email = String(payload?.email ?? '').trim()
-    const password = String(payload?.password ?? '')
-    if (!url || !anonKey) {
-      throw new SyncError('URL y clave anon del proyecto requeridas', 'ERR_SYNC_NOT_CONFIGURED')
-    }
-    if (!email || password.length < 8) {
-      throw new SyncError('El correo y una contraseña de al menos 8 caracteres son requeridos', 'ERR_SYNC_AUTH')
-    }
-    const result = await rt().syncSignUp(url, anonKey, email, password)
-    await rt().auditService.record({
-      action: result.confirmationRequired ? 'sync.signupPending' : 'sync.signup',
-      detail: email,
-    })
-    return result
-  })
+  handle(
+    IpcChannel.SyncConfigure,
+    async (payload: { url?: unknown; anonKey?: unknown; email?: unknown; password?: unknown }) => {
+      requireRole('admin')
+      const url = String(payload?.url ?? '').trim()
+      const anonKey = String(payload?.anonKey ?? '').trim()
+      const email = String(payload?.email ?? '').trim()
+      const password = String(payload?.password ?? '')
+      if (!url) throw new SyncError('URL del proyecto Supabase requerida', 'ERR_SYNC_NOT_CONFIGURED')
+      if (!anonKey) throw new SyncError('Clave anon del proyecto requerida', 'ERR_SYNC_NOT_CONFIGURED')
+      if (!email || !password) {
+        throw new SyncError('Correo y contraseña de la cuenta Supabase requeridos', 'ERR_SYNC_AUTH')
+      }
+      const status = await rt().syncLogin(url, anonKey, email, password)
+      await rt().auditService.record({
+        action: 'sync.configure',
+        detail: `${status.url} · ${status.email}`,
+      })
+      return status
+    },
+  )
+  handle(
+    IpcChannel.SyncSignUp,
+    async (payload: { url?: unknown; anonKey?: unknown; email?: unknown; password?: unknown }) => {
+      requireRole('admin')
+      const url = String(payload?.url ?? '').trim()
+      const anonKey = String(payload?.anonKey ?? '').trim()
+      const email = String(payload?.email ?? '').trim()
+      const password = String(payload?.password ?? '')
+      if (!url || !anonKey) {
+        throw new SyncError('URL y clave anon del proyecto requeridas', 'ERR_SYNC_NOT_CONFIGURED')
+      }
+      if (!email || password.length < 8) {
+        throw new SyncError(
+          'El correo y una contraseña de al menos 8 caracteres son requeridos',
+          'ERR_SYNC_AUTH',
+        )
+      }
+      const result = await rt().syncSignUp(url, anonKey, email, password)
+      await rt().auditService.record({
+        action: result.confirmationRequired ? 'sync.signupPending' : 'sync.signup',
+        detail: email,
+      })
+      return result
+    },
+  )
   handle(IpcChannel.SyncSignOut, async () => {
     requireRole('admin')
     const status = await rt().syncSignOut()
@@ -671,6 +685,7 @@ export function wireEvents(bus: EventBus, getWindow: () => BrowserWindow | null)
     bus.on('document:status', (p) => send(IpcEvent.EventDocumentStatus, p)),
     bus.on('index:progress', (p) => send(IpcEvent.EventIndexProgress, p)),
     bus.on('ocr:progress', (p) => send(IpcEvent.EventOcrProgress, p)),
+    bus.on('ocr:language:progress', (p) => send(IpcEvent.EventOcrLanguageProgress, p)),
     bus.on('ai:progress', (p) => send(IpcEvent.EventAiProgress, p)),
     bus.on('notification', (p) => send(IpcEvent.EventNotification, p)),
     bus.on('automation:run', (p) => send(IpcEvent.EventAutomationRun, p)),

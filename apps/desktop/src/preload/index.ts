@@ -65,6 +65,10 @@ const api: DocuMindApi = {
 
   ocr: {
     health: () => invoke(IpcChannel.OcrHealth),
+    languages: () => invoke(IpcChannel.OcrLanguagesList),
+    installLanguage: (code) => invoke(IpcChannel.OcrLanguageInstall, { code }),
+    removeLanguage: (code) => invoke(IpcChannel.OcrLanguageRemove, { code }),
+    checkLanguageUpdates: () => invoke(IpcChannel.OcrLanguageCheckUpdates),
   },
 
   settings: {

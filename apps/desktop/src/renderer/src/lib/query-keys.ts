@@ -13,6 +13,7 @@ export const queryKeys = {
   documentHistory: (id: number) => ['documents', id, 'history'] as const,
   system: ['system'] as const,
   ocrHealth: ['ocr', 'health'] as const,
+  ocrLanguages: ['ocr', 'languages'] as const,
   aiHealth: ['ai', 'health'] as const,
   aiUsage: ['ai', 'usage'] as const,
   apiKey: (provider: string) => ['ai', 'apiKey', provider] as const,

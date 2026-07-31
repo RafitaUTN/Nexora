@@ -7,6 +7,12 @@ export interface EventMap {
   'document:status': { documentId: number; status: DocumentStatus }
   'index:progress': { processed: number; total: number }
   'ocr:progress': { processed: number; total: number }
+  'ocr:language:progress': {
+    code: string
+    progress: number
+    status: 'downloading' | 'done' | 'error'
+    error?: string
+  }
   'ai:progress': { task: string; processed: number; total: number }
   'automation:run': { automationId: number; documentId: number; ok: boolean }
   'sync:completed': { pushed: number; pulled: number; applied: number; skipped: number }
@@ -25,9 +31,6 @@ export type EventName = keyof EventMap
  */
 export interface EventBus {
   emit<K extends EventName>(event: K, payload: EventMap[K]): void
-  on<K extends EventName>(
-    event: K,
-    handler: (payload: EventMap[K]) => void | Promise<void>,
-  ): () => void
+  on<K extends EventName>(event: K, handler: (payload: EventMap[K]) => void | Promise<void>): () => void
   clear(): void
 }

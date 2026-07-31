@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Cloud,
@@ -7,6 +7,7 @@ import {
   LogOut,
   RefreshCw,
   Save,
+  Search,
   Share2,
   ShieldCheck,
   Trash2,
@@ -20,6 +21,8 @@ import type {
   License,
   LicenseKey,
   LicenseTier,
+  OcrLanguageInfo,
+  OcrLanguageProgress,
   ProviderId,
   Share,
   ShareRole,
@@ -226,8 +229,7 @@ function LicenseSection(): JSX.Element {
       void queryClient.invalidateQueries({ queryKey: queryKeys.license })
       push({ kind: 'success', title: 'Licencia desactivada en este dispositivo' })
     },
-    onError: (error: Error) =>
-      push({ kind: 'error', title: 'No se pudo desactivar', body: error.message }),
+    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo desactivar', body: error.message }),
   })
 
   const meta = license.data
@@ -303,8 +305,7 @@ function UpdatesSection(): JSX.Element {
 
   const downloadMutation = useMutation({
     mutationFn: () => window.api.updates.download(),
-    onError: (error: Error) =>
-      push({ kind: 'error', title: 'No se pudo descargar', body: error.message }),
+    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo descargar', body: error.message }),
   })
 
   const installMutation = useMutation({
@@ -379,7 +380,10 @@ function SyncSection(): JSX.Element {
     mutationFn: (enabled: boolean) => window.api.sync.setEnabled(enabled),
     onSuccess: (status) => {
       void queryClient.setQueryData<SyncStatus>(queryKeys.sync, status)
-      push({ kind: 'success', title: status.enabled ? 'Sincronización habilitada' : 'Sincronización deshabilitada' })
+      push({
+        kind: 'success',
+        title: status.enabled ? 'Sincronización habilitada' : 'Sincronización deshabilitada',
+      })
     },
     onError: (error: Error) =>
       push({ kind: 'error', title: 'No se pudo cambiar el estado', body: error.message }),
@@ -395,8 +399,7 @@ function SyncSection(): JSX.Element {
       setPassword('')
       push({ kind: 'success', title: 'Cuenta conectada', body: `Sincronizando como ${status.email}` })
     },
-    onError: (error: Error) =>
-      push({ kind: 'error', title: 'No se pudo conectar', body: error.message }),
+    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo conectar', body: error.message }),
   })
 
   const signUpMutation = useMutation({
@@ -423,8 +426,7 @@ function SyncSection(): JSX.Element {
       void queryClient.setQueryData<SyncStatus>(queryKeys.sync, status)
       push({ kind: 'success', title: 'Cuenta desconectada' })
     },
-    onError: (error: Error) =>
-      push({ kind: 'error', title: 'No se pudo desconectar', body: error.message }),
+    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo desconectar', body: error.message }),
   })
 
   const pingMutation = useMutation({
@@ -444,8 +446,7 @@ function SyncSection(): JSX.Element {
         body: `${result.pushed} subidos · ${result.pulled} recibidos · ${result.applied} aplicados`,
       })
     },
-    onError: (error: Error) =>
-      push({ kind: 'error', title: 'No se pudo sincronizar', body: error.message }),
+    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo sincronizar', body: error.message }),
   })
 
   const status = sync.data
@@ -591,8 +592,8 @@ function SyncSection(): JSX.Element {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            La contraseña se usa una sola vez para obtener la sesión de Supabase; solo se guarda el
-            token cifrado en este dispositivo.
+            La contraseña se usa una sola vez para obtener la sesión de Supabase; solo se guarda el token
+            cifrado en este dispositivo.
           </p>
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -632,7 +633,11 @@ function SharesSection(): JSX.Element {
   })
 
   useEffect(
-    () => window.api.on(IpcEvent.EventSharesChanged, () => void queryClient.invalidateQueries({ queryKey: queryKeys.shares })),
+    () =>
+      window.api.on(
+        IpcEvent.EventSharesChanged,
+        () => void queryClient.invalidateQueries({ queryKey: queryKeys.shares }),
+      ),
     [queryClient],
   )
 
@@ -649,8 +654,7 @@ function SharesSection(): JSX.Element {
         body: `${share.memberEmail} · ${SHARE_ROLE_LABELS[share.role]}`,
       })
     },
-    onError: (error: Error) =>
-      push({ kind: 'error', title: 'No se pudo invitar', body: error.message }),
+    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo invitar', body: error.message }),
   })
 
   const acceptMutation = useMutation({
@@ -659,8 +663,7 @@ function SharesSection(): JSX.Element {
       invalidate()
       push({ kind: 'success', title: 'Biblioteca aceptada', body: share.ownerEmail })
     },
-    onError: (error: Error) =>
-      push({ kind: 'error', title: 'No se pudo aceptar', body: error.message }),
+    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo aceptar', body: error.message }),
   })
 
   const revokeMutation = useMutation({
@@ -669,12 +672,12 @@ function SharesSection(): JSX.Element {
       invalidate()
       push({ kind: 'success', title: 'Acceso revocado', body: share.memberEmail })
     },
-    onError: (error: Error) =>
-      push({ kind: 'error', title: 'No se pudo revocar', body: error.message }),
+    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo revocar', body: error.message }),
   })
 
   const setRoleMutation = useMutation({
-    mutationFn: (payload: { uid: string; role: ShareRole }) => window.api.shares.setRole(payload.uid, payload.role),
+    mutationFn: (payload: { uid: string; role: ShareRole }) =>
+      window.api.shares.setRole(payload.uid, payload.role),
     onSuccess: (share: Share) => {
       invalidate()
       push({
@@ -746,11 +749,7 @@ function SharesSection(): JSX.Element {
             </div>
             <div className="min-w-0 flex-1 basis-40 space-y-1.5">
               <Label htmlFor="share-role">Acceso</Label>
-              <Select
-                id="share-role"
-                value={role}
-                onChange={(e) => setRole(e.target.value as ShareRole)}
-              >
+              <Select id="share-role" value={role} onChange={(e) => setRole(e.target.value as ShareRole)}>
                 <option value="viewer">Solo lectura</option>
                 <option value="editor">Edición</option>
               </Select>
@@ -811,12 +810,267 @@ function SharesSection(): JSX.Element {
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Aún no compartes tu biblioteca. Invita a un usuario por correo para que pueda leerla
-              (o editarla) desde su dispositivo.
+              Aún no compartes tu biblioteca. Invita a un usuario por correo para que pueda leerla (o
+              editarla) desde su dispositivo.
             </p>
           )}
         </>
       ) : null}
+    </div>
+  )
+}
+
+function OcrSection({
+  form,
+  set,
+}: {
+  form: SettingsForm
+  set: (key: 'ocrLanguages', value: string) => void
+}): JSX.Element {
+  const queryClient = useQueryClient()
+  const push = useToasts((s) => s.push)
+  const [query, setQuery] = useState('')
+  const [downloading, setDownloading] = useState<Record<string, boolean>>({})
+  const [progress, setProgress] = useState<Record<string, number>>({})
+  const [updates, setUpdates] = useState<Record<string, string>>({})
+
+  const active = useMemo(
+    () =>
+      new Set(
+        form.ocrLanguages
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      ),
+    [form.ocrLanguages],
+  )
+
+  const languages = useQuery({
+    queryKey: queryKeys.ocrLanguages,
+    queryFn: () => window.api.ocr.languages(),
+  })
+
+  useEffect(
+    () =>
+      window.api.on<OcrLanguageProgress>(IpcEvent.EventOcrLanguageProgress, (p) => {
+        if (p.status === 'downloading') {
+          setDownloading((d) => ({ ...d, [p.code]: true }))
+          setProgress((pr) => ({ ...pr, [p.code]: p.progress }))
+        }
+      }),
+    [],
+  )
+
+  const setActive = (code: string, enabled: boolean): void => {
+    const next = new Set(active)
+    if (enabled) next.add(code)
+    else next.delete(code)
+    set('ocrLanguages', [...next].join(','))
+  }
+
+  const installMutation = useMutation({
+    mutationFn: (code: string) => window.api.ocr.installLanguage(code),
+    onMutate: (code) => {
+      setDownloading((d) => ({ ...d, [code]: true }))
+      setProgress((p) => ({ ...p, [code]: 0 }))
+    },
+    onSuccess: ({ code }) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ocrLanguages })
+      setDownloading((d) => {
+        const next = { ...d }
+        delete next[code]
+        return next
+      })
+      setProgress((p) => {
+        const next = { ...p }
+        delete next[code]
+        return next
+      })
+      setUpdates((u) => {
+        const next = { ...u }
+        delete next[code]
+        return next
+      })
+      setActive(code, true)
+      push({ kind: 'success', title: 'Idioma instalado', body: 'Ahora se usará para leer tus documentos.' })
+    },
+    onError: (error: Error, code) => {
+      setDownloading((d) => {
+        const next = { ...d }
+        delete next[code]
+        return next
+      })
+      setProgress((p) => {
+        const next = { ...p }
+        delete next[code]
+        return next
+      })
+      push({ kind: 'error', title: 'No se pudo instalar el idioma', body: error.message })
+    },
+  })
+
+  const removeMutation = useMutation({
+    mutationFn: (code: string) => window.api.ocr.removeLanguage(code),
+    onSuccess: ({ code }) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ocrLanguages })
+      setUpdates((u) => {
+        const next = { ...u }
+        delete next[code]
+        return next
+      })
+      push({ kind: 'success', title: 'Idioma eliminado' })
+    },
+    onError: (error: Error) =>
+      push({ kind: 'error', title: 'No se pudo eliminar el idioma', body: error.message }),
+  })
+
+  const checkUpdatesMutation = useMutation({
+    mutationFn: () => window.api.ocr.checkLanguageUpdates(),
+    onSuccess: (result) => {
+      setUpdates(Object.fromEntries(result.map((u) => [u.code, u.latestVersion])))
+      push(
+        result.length > 0
+          ? {
+              kind: 'info',
+              title: 'Actualizaciones disponibles',
+              body: `${result.length} idioma(s) con versión nueva`,
+            }
+          : { kind: 'success', title: 'Idiomas actualizados' },
+      )
+    },
+    onError: (error: Error) => push({ kind: 'error', title: 'No se pudo comprobar', body: error.message }),
+  })
+
+  const list: OcrLanguageInfo[] = languages.data ?? []
+  const filtered = query.trim()
+    ? list.filter((lang) =>
+        `${lang.name} ${lang.nativeName}`.toLowerCase().includes(query.trim().toLowerCase()),
+      )
+    : list
+
+  return (
+    <div className="space-y-4 p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1 basis-56">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar idioma…"
+              aria-label="Buscar idioma OCR"
+              className="pl-9"
+            />
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => checkUpdatesMutation.mutate()}
+          disabled={checkUpdatesMutation.isPending}
+        >
+          {checkUpdatesMutation.isPending ? <Spinner /> : <RefreshCw />}
+          Comprobar actualizaciones
+        </Button>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Los idiomas activos se usan automáticamente para leer documentos escaneados. Los más comunes ya vienen
+        preinstalados.
+      </p>
+
+      {languages.isLoading ? (
+        <Skeleton className="h-48" />
+      ) : (
+        <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
+          {filtered.map((lang) => {
+            const isActive = active.has(lang.code)
+            const isDownloading = Boolean(downloading[lang.code])
+            const hasUpdate = updates[lang.code] !== undefined
+            const pct = progress[lang.code] ?? 0
+            return (
+              <div
+                key={lang.code}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-medium">{lang.name}</p>
+                    {lang.installed ? (
+                      <Badge tone={lang.preinstalled ? 'info' : 'success'}>
+                        {lang.preinstalled ? 'Preinstalado' : 'Instalado'}
+                      </Badge>
+                    ) : null}
+                    {isActive ? <Badge tone="success">Activo</Badge> : null}
+                    {hasUpdate ? <Badge tone="warning">Actualización disponible</Badge> : null}
+                  </div>
+                  {lang.nativeName && lang.nativeName !== lang.name ? (
+                    <p className="text-xs text-muted-foreground">{lang.nativeName}</p>
+                  ) : null}
+                  {isDownloading ? (
+                    <div className="mt-2 h-2 w-full max-w-xs overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full bg-primary transition-all"
+                        style={{ width: `${Math.round(pct * 100)}%` }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  {isDownloading ? (
+                    <span className="text-xs text-muted-foreground">Descargando…</span>
+                  ) : lang.installed ? (
+                    <>
+                      <Switch
+                        checked={isActive}
+                        onCheckedChange={(checked) => setActive(lang.code, checked)}
+                        aria-label={`Usar ${lang.name}`}
+                      />
+                      {hasUpdate ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => installMutation.mutate(lang.code)}
+                          disabled={installMutation.isPending}
+                        >
+                          {installMutation.isPending ? <Spinner /> : <Download />}
+                          Actualizar
+                        </Button>
+                      ) : null}
+                      {!isActive ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Eliminar ${lang.name}`}
+                          onClick={() => removeMutation.mutate(lang.code)}
+                          disabled={removeMutation.isPending}
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 />
+                        </Button>
+                      ) : null}
+                    </>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => installMutation.mutate(lang.code)}
+                      disabled={installMutation.isPending}
+                    >
+                      {installMutation.isPending && installMutation.variables === lang.code ? (
+                        <Spinner />
+                      ) : (
+                        <Download />
+                      )}
+                      Descargar
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+          {filtered.length === 0 ? <p className="text-sm text-muted-foreground">Sin resultados.</p> : null}
+        </div>
+      )}
     </div>
   )
 }
@@ -826,9 +1080,7 @@ export function SettingsPage(): JSX.Element {
   const push = useToasts((s) => s.push)
 
   const settings = useQuery({ queryKey: queryKeys.settings, queryFn: () => window.api.settings.get() })
-  const [form, setForm] = useState<SettingsForm | null>(() =>
-    settings.data ? toForm(settings.data) : null,
-  )
+  const [form, setForm] = useState<SettingsForm | null>(() => (settings.data ? toForm(settings.data) : null))
   const [prevSettings, setPrevSettings] = useState<AppSettings | null>(settings.data ?? null)
   const [dirty, setDirty] = useState(false)
 
@@ -959,30 +1211,11 @@ export function SettingsPage(): JSX.Element {
       <section className="rounded-lg border bg-card">
         <div className="border-b p-4">
           <h2 className="text-base font-semibold">OCR</h2>
+          <p className="text-xs text-muted-foreground">
+            Lectura del texto en documentos escaneados y fotografiados.
+          </p>
         </div>
-        <div className="grid gap-4 p-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="settings-ocr-langs">Idiomas (códigos, separados por coma)</Label>
-            <Input
-              id="settings-ocr-langs"
-              value={form.ocrLanguages}
-              onChange={(e) => set('ocrLanguages', e.target.value)}
-              placeholder="spa, eng"
-            />
-            <p className="text-xs text-muted-foreground">Ej.: spa, eng, fra, por</p>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="settings-ocr-dpi">DPI máximo (72–600)</Label>
-            <Input
-              id="settings-ocr-dpi"
-              type="number"
-              min={72}
-              max={600}
-              value={form.ocrMaxDpi}
-              onChange={(e) => set('ocrMaxDpi', e.target.value)}
-            />
-          </div>
-        </div>
+        <OcrSection form={form} set={set} />
       </section>
 
       <section className="rounded-lg border bg-card">
